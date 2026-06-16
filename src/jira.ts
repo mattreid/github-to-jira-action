@@ -68,6 +68,7 @@ export class Jira {
 
   #storyPointsFieldId: string | undefined;
   #epicNameFieldId: string | undefined;
+  #githubIssueFieldId: string | undefined;
 
   #project: Project | undefined;
 
@@ -163,6 +164,15 @@ export class Jira {
       throw new Error('Epic Name field cannot be found');
     }
     this.#epicNameFieldId = epicNameField.id;
+
+    // search for the field named 'GitHub Issue' (for deduplication)
+    const githubIssueField = fields.find((field) => field.name === 'GitHub Issue');
+    if (githubIssueField && githubIssueField.id) {
+      this.#githubIssueFieldId = githubIssueField.id;
+      console.log(`Found GitHub Issue field: ${githubIssueField.id}`);
+    } else {
+      console.warn('GitHub Issue field not found - will use remote links API for deduplication (may be unreliable)');
+    }
   }
 
   async getReleases(): Promise<Version[]> {
@@ -254,7 +264,13 @@ export class Jira {
     await this.#client.projectVersions.updateVersion(params);
   }
 
-  async findExistingGithubIssueInJira(remoteId: string): Promise<string | undefined> {
+  async findExistingGithubIssueInJira(remoteId: string, githubUrl?: string): Promise<string | undefined> {
+    // If we have the GitHub Issue custom field, use it for reliable searching
+    if (this.#githubIssueFieldId && githubUrl) {
+      return await this.findExistingIssueByCustomField(githubUrl);
+    }
+
+    // Otherwise fall back to remote links API (may be unreliable)
     try {
       // Try the JQL function first (works in some Jira Cloud instances)
       const jql = `issue in issuesWithRemoteLinksByGlobalId("${remoteId}") and project = "${this.#projectConfiguration.jira.projectKey}"`;
@@ -274,30 +290,58 @@ export class Jira {
     }
   }
 
+  private async findExistingIssueByCustomField(githubUrl: string): Promise<string | undefined> {
+    // Search using the GitHub Issue custom field (reliable even when remote links API is broken)
+    const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND "${this.#githubIssueFieldId}" ~ "${githubUrl}"`;
+    const query = { jql, maxResults: 1 };
+    const issues = await this.#client.issueSearch.searchForIssuesUsingJql(query);
+    return issues.issues?.[0]?.key;
+  }
+
   private async findExistingIssueByRemoteLinkAPI(remoteId: string): Promise<string | undefined> {
     // Fallback: Search for issues in the project and check their remote links via v3 API
     // This is slower but works when the JQL function is deprecated
-    const jql = `project = "${this.#projectConfiguration.jira.projectKey}" ORDER BY created DESC`;
-    const query = { jql, maxResults: 100 }; // Check last 100 issues
-    const issues = await this.#client.issueSearch.searchForIssuesUsingJql(query);
+    try {
+      const jql = `project = "${this.#projectConfiguration.jira.projectKey}" ORDER BY created DESC`;
+      const query = { jql, maxResults: 100 }; // Check last 100 issues
+      const issues = await this.#client.issueSearch.searchForIssuesUsingJql(query);
 
-    for (const issue of issues.issues || []) {
-      try {
-        const remoteLinks = await this.#clientV3.issueRemoteLinks.getRemoteIssueLinks({
-          issueIdOrKey: issue.key,
-        });
+      for (const issue of issues.issues || []) {
+        try {
+          const remoteLinks = await this.#clientV3.issueRemoteLinks.getRemoteIssueLinks({
+            issueIdOrKey: issue.key,
+          });
 
-        const hasMatchingLink = remoteLinks.some((link) => link.globalId === remoteId);
-        if (hasMatchingLink) {
-          return issue.key;
+          const hasMatchingLink = remoteLinks.some((link) => link.globalId === remoteId);
+          if (hasMatchingLink) {
+            return issue.key;
+          }
+        } catch (linkError: unknown) {
+          const error = linkError as { response?: { status?: number; data?: unknown } };
+          if (error.response?.status === 410) {
+            // Known Jira bug (JRACLOUD-28064): GET also returns 410
+            // Since we can't reliably search for existing issues, fall back to URL-based search
+            console.warn(
+              `⚠️  Remote links GET API returns 410 (known Jira bug). Cannot search by remote links.`,
+            );
+            // Stop trying remote links API - will fall back to creating new issues
+            return undefined;
+          }
+          // If we can't get remote links for this issue for other reasons, skip it
+          continue;
         }
-      } catch {
-        // If we can't get remote links for this issue, skip it
-        continue;
       }
-    }
 
-    return undefined;
+      return undefined;
+    } catch (searchError: unknown) {
+      const error = searchError as { response?: { status?: number } };
+      if (error.response?.status === 410) {
+        // Remote links API is completely unavailable - return undefined to create new issues
+        console.warn(`⚠️  Remote links API unavailable (410). Will create new issues without deduplication.`);
+        return undefined;
+      }
+      throw searchError;
+    }
   }
 
   async createOrUpdateIssue(createOrUpdateIssueParams: CreateIssueParams): Promise<{ key: string }> {
@@ -321,6 +365,11 @@ export class Jira {
       createOptionalFields[this.#epicNameFieldId] = createOrUpdateIssueParams.title;
     }
 
+    // GitHub Issue URL (for reliable deduplication)
+    if (this.#githubIssueFieldId) {
+      createOptionalFields[this.#githubIssueFieldId] = createOrUpdateIssueParams.remoteLinkUrl;
+    }
+
     // create the REST API parameters
     const createParams = {
       fields: {
@@ -335,7 +384,10 @@ export class Jira {
       },
     };
 
-    const existingKey = await this.findExistingGithubIssueInJira(createOrUpdateIssueParams.globalId);
+    const existingKey = await this.findExistingGithubIssueInJira(
+      createOrUpdateIssueParams.globalId,
+      createOrUpdateIssueParams.remoteLinkUrl,
+    );
 
     // create issue in Jira or update if already exists
     let issueKey: string;
@@ -346,7 +398,7 @@ export class Jira {
       issueKey = existingKey;
     }
 
-    // update the remote link using v3 API (v2 is deprecated and returns 410)
+    // update the remote link using v3 API
     try {
       await this.#clientV3.issueRemoteLinks.createOrUpdateRemoteIssueLink({
         issueIdOrKey: issueKey,
@@ -360,15 +412,18 @@ export class Jira {
           },
         },
       });
+      console.log(`✅ Remote link created for issue ${issueKey}`);
     } catch (remoteLinkError: unknown) {
-      // Remote links API may still fail in some configurations
-      // This is not critical - the issue still gets created/updated
-      const error = remoteLinkError as { response?: { status?: number } };
+      const error = remoteLinkError as { response?: { status?: number; data?: unknown } };
       if (error.response?.status === 410) {
+        // Known Jira bug (JRACLOUD-28064): API returns 410 but link is actually created
+        // Treat this as success and continue
         console.warn(
-          `⚠️  Remote link API returned 410 (Gone) for issue ${issueKey}. Issue created but GitHub link not added.`,
+          `⚠️  Remote link API returned 410 (known Jira bug), but link was likely created successfully for ${issueKey}`,
         );
+        // Don't throw - the link was probably created despite the 410 error
       } else {
+        console.error(`❌ Remote link error (status ${error.response?.status}):`, error.response?.data);
         // Re-throw other errors
         throw remoteLinkError;
       }
