@@ -254,7 +254,7 @@ export class Jira {
 
   async findExistingGithubIssueInJira(remoteId: string): Promise<string | undefined> {
     try {
-      // jql to search for an issue having the remote link with globalId (the github issue number)
+      // Try the JQL function first (works in some Jira Cloud instances)
       const jql = `issue in issuesWithRemoteLinksByGlobalId("${remoteId}") and project = "${this.#projectConfiguration.jira.projectKey}"`;
       const query = { jql, maxResults: 1 };
       const issues = await this.#client.issueSearch.searchForIssuesUsingJql(query);
@@ -262,15 +262,40 @@ export class Jira {
     } catch (searchError: unknown) {
       const error = searchError as { response?: { status?: number } };
       if (error.response?.status === 410) {
-        // issuesWithRemoteLinksByGlobalId is deprecated in some Jira Cloud instances
-        // Return undefined to create a new issue instead of searching for existing
+        // JQL function is deprecated, fall back to fetching all project issues and checking remote links
         console.warn(
-          `⚠️  Remote links JQL function returned 410 (deprecated). Cannot search for existing issues. Will create new issues.`,
+          `⚠️  JQL remote links function deprecated (410). Falling back to checking remote links via API...`,
         );
-        return undefined;
+        return await this.findExistingIssueByRemoteLinkAPI(remoteId);
       }
       throw searchError;
     }
+  }
+
+  private async findExistingIssueByRemoteLinkAPI(remoteId: string): Promise<string | undefined> {
+    // Fallback: Search for issues in the project and check their remote links
+    // This is slower but works when the JQL function is deprecated
+    const jql = `project = "${this.#projectConfiguration.jira.projectKey}" ORDER BY created DESC`;
+    const query = { jql, maxResults: 100 }; // Check last 100 issues
+    const issues = await this.#client.issueSearch.searchForIssuesUsingJql(query);
+
+    for (const issue of issues.issues || []) {
+      try {
+        const remoteLinks = await this.#client.issueRemoteLinks.getRemoteIssueLinks({
+          issueIdOrKey: issue.key,
+        });
+
+        const hasMatchingLink = remoteLinks.some((link) => link.globalId === remoteId);
+        if (hasMatchingLink) {
+          return issue.key;
+        }
+      } catch {
+        // If we can't get remote links for this issue, skip it
+        continue;
+      }
+    }
+
+    return undefined;
   }
 
   async createOrUpdateIssue(createOrUpdateIssueParams: CreateIssueParams): Promise<{ key: string }> {
