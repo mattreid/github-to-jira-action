@@ -392,10 +392,19 @@ export class Jira {
     // create issue in Jira or update if already exists
     let issueKey: string;
     if (!existingKey) {
-      const result = await this.#client.issues.createIssue(createParams);
-      issueKey = result.key;
+      try {
+        const result = await this.#client.issues.createIssue(createParams);
+        issueKey = result.key;
+        console.log(`✅ Created Jira issue ${issueKey}`);
+      } catch (createError: unknown) {
+        const error = createError as { response?: { status?: number; data?: unknown } };
+        console.error(`❌ Failed to create issue. Status: ${error.response?.status}`);
+        console.error(`   Data:`, JSON.stringify(error.response?.data, null, 2));
+        throw createError;
+      }
     } else {
       issueKey = existingKey;
+      console.log(`Found existing Jira issue ${issueKey}`);
     }
 
     // update the remote link using v3 API
