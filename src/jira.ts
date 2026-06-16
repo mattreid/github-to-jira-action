@@ -488,15 +488,25 @@ export class Jira {
     // do the transitions for the status
     const toStatus = createOrUpdateIssueParams.status;
 
-    // get current status of the issue
-    const issue = await this.#client.issues.getIssue({ issueIdOrKey: issueKey });
-    const currentStatus = issue.fields?.status?.name;
+    try {
+      // get current status of the issue
+      const issue = await this.#client.issues.getIssue({ issueIdOrKey: issueKey });
+      const currentStatus = issue.fields?.status?.name;
 
-    // if the status is the same, no need to update
-    if (currentStatus?.toLowerCase() !== toStatus.toLowerCase()) {
-      await this.updateIssueStatusTo(issueKey, toStatus);
-    } else {
-      debug(`  🧪 Issue ${issueKey} already in status ${toStatus}, skipping`);
+      // if the status is the same, no need to update
+      if (currentStatus?.toLowerCase() !== toStatus.toLowerCase()) {
+        await this.updateIssueStatusTo(issueKey, toStatus);
+      } else {
+        debug(`  🧪 Issue ${issueKey} already in status ${toStatus}, skipping`);
+      }
+    } catch (statusError: unknown) {
+      const error = statusError as { response?: { status?: number } };
+      if (error.response?.status === 410) {
+        console.warn(`⚠️  Status transition returned 410 for ${issueKey}. Issue created but status not updated.`);
+        // Continue - issue was created successfully
+      } else {
+        throw statusError;
+      }
     }
 
     // if sprint id, need to add the issue to the sprint
