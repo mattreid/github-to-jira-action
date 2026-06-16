@@ -497,6 +497,10 @@ export class Jira {
         console.warn(`⚠️  Edit issue API returned 410 (Gone) for ${issueKey}. Skipping field updates.`);
         console.warn(`   Fields attempted:`, JSON.stringify(Object.keys(updateFields)));
         // Continue without the field updates
+      } else if (error.response?.status === 400) {
+        console.warn(`⚠️  Edit issue API returned 400 for ${issueKey}. Some fields may not be on the screen.`);
+        console.warn(`   Error:`, JSON.stringify(error.response?.data));
+        // Continue - issue was created successfully
       } else {
         throw editError;
       }
