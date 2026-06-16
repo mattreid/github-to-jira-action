@@ -511,35 +511,71 @@ export class Jira {
 
     // if sprint id, need to add the issue to the sprint
     if (createOrUpdateIssueParams.sprintBoardId) {
-      await this.#agileClient.sprint.moveIssuesToSprintAndRank({
-        sprintId: createOrUpdateIssueParams.sprintBoardId,
-        issues: [issueKey],
-      });
+      try {
+        await this.#agileClient.sprint.moveIssuesToSprintAndRank({
+          sprintId: createOrUpdateIssueParams.sprintBoardId,
+          issues: [issueKey],
+        });
+        console.log(`✅ Added ${issueKey} to sprint ${createOrUpdateIssueParams.sprintBoardId}`);
+      } catch (sprintError: unknown) {
+        const error = sprintError as { response?: { status?: number } };
+        if (error.response?.status === 410) {
+          console.warn(
+            `⚠️  Sprint assignment returned 410 for ${issueKey}. Issue created but not added to sprint.`,
+          );
+          // Continue - issue was created/updated successfully
+        } else {
+          console.error(`❌ Sprint assignment failed:`, error);
+          throw sprintError;
+        }
+      }
     }
 
+    console.log(`✅ Successfully processed issue ${issueKey}`);
     return { key: issueKey };
   }
 
   async getTransitionId(issueKey: string, targetStatus: string): Promise<string | undefined> {
-    const transitions = await this.#client.issues.getTransitions({ issueIdOrKey: issueKey });
+    try {
+      const transitions = await this.#client.issues.getTransitions({ issueIdOrKey: issueKey });
 
-    // Find the transition to the target status (e.g., "NEW")
-    const transition = transitions.transitions?.find((t) => t.to?.name?.toLowerCase() === targetStatus.toLowerCase());
+      // Find the transition to the target status (e.g., "NEW")
+      const transition = transitions.transitions?.find((t) => t.to?.name?.toLowerCase() === targetStatus.toLowerCase());
 
-    return transition?.id;
+      return transition?.id;
+    } catch (error: unknown) {
+      const err = error as { response?: { status?: number } };
+      if (err.response?.status === 410) {
+        console.warn(`⚠️  getTransitions returned 410 for ${issueKey}`);
+        return undefined;
+      }
+      throw error;
+    }
   }
 
   async updateIssueStatusTo(issueKey: string, newStatus: string) {
     const transitionId = await this.getTransitionId(issueKey, newStatus);
 
     if (!transitionId) {
-      throw new Error(`Transition to status "${newStatus}" not found`);
+      console.warn(`⚠️  Transition to status "${newStatus}" not found for ${issueKey}`);
+      return; // Don't throw - just skip the transition
     }
 
     // Perform the transition
-    await this.#client.issues.doTransition({
-      issueIdOrKey: issueKey,
-      transition: { id: transitionId },
-    });
+    try {
+      await this.#client.issues.doTransition({
+        issueIdOrKey: issueKey,
+        transition: { id: transitionId },
+      });
+      console.log(`✅ Transitioned ${issueKey} to ${newStatus}`);
+    } catch (error: unknown) {
+      const err = error as { response?: { status?: number } };
+      if (err.response?.status === 410) {
+        console.warn(`⚠️  doTransition returned 410 for ${issueKey}`);
+        // Don't throw - transition failed but issue exists
+      } else {
+        throw error;
+      }
+    }
   }
 }
