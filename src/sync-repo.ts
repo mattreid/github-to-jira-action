@@ -269,6 +269,14 @@ export class SyncRepository {
       const storyPoints = projectData?.project.storyPoints?.value;
       const jiraProjectKey = this.#projectConfiguration.jira.projectKey;
 
+      // Debug: log story points value
+      if (storyPoints !== undefined) {
+        debug(`  📊 Story Points from GitHub: ${storyPoints}`);
+      } else {
+        debug(`  ⚠️  Story Points field is undefined for issue ${issue.number}`);
+        debug(`  ProjectData:`, JSON.stringify(projectData?.project, null, 2));
+      }
+
       const sprintName = projectData?.project.sprint?.title;
       let sprintBoardId: number | undefined;
       if (sprintName) {
