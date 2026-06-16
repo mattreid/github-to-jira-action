@@ -453,11 +453,6 @@ export class Jira {
     // optional fields that can be defined for updating an issue
     const updateOptionalFields: Record<string, unknown> = {};
 
-    // GitHub Issue URL (for deduplication)
-    if (this.#githubIssueFieldId) {
-      updateOptionalFields[this.#githubIssueFieldId] = createOrUpdateIssueParams.remoteLinkUrl;
-    }
-
     // story points ?
     if (this.#storyPointsFieldId) {
       updateOptionalFields[this.#storyPointsFieldId] = createOrUpdateIssueParams.storyPoints ?? 1;
@@ -477,12 +472,15 @@ export class Jira {
 
     const components = component ? [component] : undefined;
 
+    // Append GitHub issue URL to description for easy reference and deduplication
+    const descriptionWithGitHubLink = `${createOrUpdateIssueParams.body}\n\n---\nGitHub: ${createOrUpdateIssueParams.remoteLinkUrl}`;
+
     // update the issue with the story points, body, etc
     const updateFields = {
       ...createParams.fields,
       ...updateOptionalFields,
       components,
-      description: createOrUpdateIssueParams.body,
+      description: descriptionWithGitHubLink,
       fixVersions,
     };
 
@@ -497,10 +495,6 @@ export class Jira {
         console.warn(`⚠️  Edit issue API returned 410 (Gone) for ${issueKey}. Skipping field updates.`);
         console.warn(`   Fields attempted:`, JSON.stringify(Object.keys(updateFields)));
         // Continue without the field updates
-      } else if (error.response?.status === 400) {
-        console.warn(`⚠️  Edit issue API returned 400 for ${issueKey}. Some fields may not be on the screen.`);
-        console.warn(`   Error:`, JSON.stringify(error.response?.data));
-        // Continue - issue was created successfully
       } else {
         throw editError;
       }
