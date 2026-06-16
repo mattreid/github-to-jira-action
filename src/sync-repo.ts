@@ -270,11 +270,11 @@ export class SyncRepository {
       const jiraProjectKey = this.#projectConfiguration.jira.projectKey;
 
       // Debug: log story points value
-      if (storyPoints !== undefined) {
-        debug(`  📊 Story Points from GitHub: ${storyPoints}`);
-      } else {
-        debug(`  ⚠️  Story Points field is undefined for issue ${issue.number}`);
-        debug(`  ProjectData:`, JSON.stringify(projectData?.project, null, 2));
+      if (isDebug() && storyPoints !== undefined) {
+        info(`  📊 Story Points from GitHub: ${storyPoints}`);
+      } else if (isDebug()) {
+        warning(`  ⚠️  Story Points field is undefined for issue ${issue.number}`);
+        info(`  ProjectData: ${JSON.stringify(projectData?.project, null, 2)}`);
       }
 
       const sprintName = projectData?.project.sprint?.title;
