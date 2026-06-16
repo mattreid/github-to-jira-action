@@ -1,4 +1,14 @@
 run-*.sh
+test-*.local.sh
 lib/
 node_modules/
 sync*.yaml
+
+# Test files (not for commit - contain environment-specific setup)
+test-auth-config.mjs
+test-jira-client.mjs
+test-jira-connection.mjs
+test-staging.sh
+pre-flight-check.sh
+TEST_SETUP.md
+test-templates/

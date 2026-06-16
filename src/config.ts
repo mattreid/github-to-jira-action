@@ -37,6 +37,7 @@ export interface ProjectConfiguration {
 
   jira: {
     host: string;
+    email: string;
     projectKey: string;
     writeToken: string;
     component: string;
@@ -54,6 +55,7 @@ export interface ProjectConfiguration {
 export class Configuration {
   #githubReakToken: string;
   #jiraHost: string;
+  #jiraEmail: string;
   #jiraWriteToken: string;
   #syncYaml: SyncYaml;
   #syncStateYaml: SyncStateYaml | undefined;
@@ -65,12 +67,14 @@ export class Configuration {
   constructor(params: {
     githubReadToken: string;
     jiraHost: string;
+    jiraEmail: string;
     jiraWriteToken: string;
     syncYaml: SyncYaml;
     syncStateYaml?: SyncStateYaml;
   }) {
     this.#githubReakToken = params.githubReadToken;
     this.#jiraHost = params.jiraHost;
+    this.#jiraEmail = params.jiraEmail;
     this.#jiraWriteToken = params.jiraWriteToken;
     this.#syncYaml = params.syncYaml;
     this.#syncStateYaml = params.syncStateYaml;
@@ -168,6 +172,7 @@ export class Configuration {
 
       const jira = {
         host: this.#jiraHost,
+        email: this.#jiraEmail,
         projectKey: project.jira.projectKey,
         writeToken: this.#jiraWriteToken,
         globalIdPrefix: project.jira.globalIdPrefix,

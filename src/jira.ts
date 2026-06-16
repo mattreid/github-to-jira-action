@@ -80,7 +80,10 @@ export class Jira {
     const jiraConfig = {
       host: this.#projectConfiguration.jira.host,
       authentication: {
-        personalAccessToken: this.#projectConfiguration.jira.writeToken,
+        basic: {
+          email: this.#projectConfiguration.jira.email,
+          apiToken: this.#projectConfiguration.jira.writeToken,
+        },
       },
     };
 

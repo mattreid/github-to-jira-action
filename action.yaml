@@ -7,6 +7,9 @@ inputs:
   jira-host:
     description: 'URL of the Jira instance'
     required: true
+  jira-email:
+    description: 'Email address associated with the Jira account (required for Jira Cloud)'
+    required: true
   jira-write-token:
     description: 'Jira REST API token with write access'
     required: true

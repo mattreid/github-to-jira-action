@@ -9,6 +9,7 @@ import { Sync } from './sync.js';
 
 export class Main {
   public static readonly JIRA_HOST: string = 'jira-host';
+  public static readonly JIRA_EMAIL: string = 'jira-email';
   public static readonly JIRA_WRITE_TOKEN: string = 'jira-write-token';
   public static readonly GITHUB_READ_TOKEN: string = 'github-read-token';
 
@@ -19,6 +20,12 @@ export class Main {
     const jiraHost = core.getInput(Main.JIRA_HOST);
     if (!jiraHost) {
       throw new Error('No Jira Host provided');
+    }
+
+    // Jira email
+    const jiraEmail = core.getInput(Main.JIRA_EMAIL);
+    if (!jiraEmail) {
+      throw new Error('No Jira Email provided');
     }
 
     // Jira write token
@@ -52,6 +59,7 @@ export class Main {
     const params = {
       githubReadToken,
       jiraHost,
+      jiraEmail,
       jiraWriteToken,
       syncYaml,
       syncStateYaml,

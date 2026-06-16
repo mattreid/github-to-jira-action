@@ -151,6 +151,7 @@ jobs:
         uses: benoitf/github-to-jira-action@next
         with:
           jira-host: ${{ secrets.JIRA_HOST }}
+          jira-email: ${{ secrets.JIRA_EMAIL }}
           jira-write-token: ${{ secrets.JIRA_WRITE_TOKEN }}
           github-read-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -184,10 +185,25 @@ You need to provide Jira credentials and GitHub tokens as secrets in your reposi
 
 1. Go to **Settings > Secrets > Actions** in your GitHub repository.
 2. Add the following secrets:
-   - **JIRA_WRITE_TOKEN**: Your Jira Rest API token to write.
-   - **JIRA_HOST**: The base URL of your Jira instance.
+   - **JIRA_HOST**: The base URL of your Jira instance (e.g., `https://your-domain.atlassian.net` for Jira Cloud).
+   - **JIRA_EMAIL**: The email address associated with your Jira account (required for Jira Cloud authentication).
+   - **JIRA_WRITE_TOKEN**: Your Jira API token with write access. For Jira Cloud, generate this from [Atlassian Account Settings](https://id.atlassian.com/manage-profile/security/api-tokens).
 
 The **GITHUB_TOKEN** secret is one from the default GitHub Actions. It is ok to use this token if all GitHub projects/issues data are publicly available.
+
+### Jira Cloud Authentication
+
+This action uses **Basic Authentication** for Jira Cloud, which requires:
+- Your Jira account email address
+- An API token (not your password)
+
+To create a Jira Cloud API token:
+1. Log in to https://id.atlassian.com/manage-profile/security/api-tokens
+2. Click **Create API token**
+3. Give it a label (e.g., "GitHub to Jira Sync")
+4. Copy the token and add it as the `JIRA_WRITE_TOKEN` secret
+
+**Note**: For Jira Data Center/Server, you would use a Personal Access Token instead, but this action is now configured for Jira Cloud's authentication method.
 
 ---
 
