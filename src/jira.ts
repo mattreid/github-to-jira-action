@@ -292,10 +292,24 @@ export class Jira {
 
   private async findExistingIssueByCustomField(githubUrl: string): Promise<string | undefined> {
     // Search using the GitHub Issue custom field (reliable even when remote links API is broken)
-    const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND "${this.#githubIssueFieldId}" ~ "${githubUrl}"`;
-    const query = { jql, maxResults: 1 };
-    const issues = await this.#client.issueSearch.searchForIssuesUsingJql(query);
-    return issues.issues?.[0]?.key;
+    try {
+      const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND "${this.#githubIssueFieldId}" ~ "${githubUrl}"`;
+      const query = { jql, maxResults: 1 };
+      const issues = await this.#client.issueSearch.searchForIssuesUsingJql(query);
+      const foundKey = issues.issues?.[0]?.key;
+      if (foundKey) {
+        console.log(`Found existing issue ${foundKey} via GitHub Issue custom field`);
+      }
+      return foundKey;
+    } catch (error: unknown) {
+      const err = error as { response?: { status?: number; data?: unknown } };
+      console.warn(
+        `⚠️  GitHub Issue custom field search failed (status ${err.response?.status}). Will create new issue.`,
+      );
+      console.warn(`   JQL: project = "${this.#projectConfiguration.jira.projectKey}" AND "${this.#githubIssueFieldId}" ~ "${githubUrl}"`);
+      // Return undefined to create a new issue
+      return undefined;
+    }
   }
 
   private async findExistingIssueByRemoteLinkAPI(remoteId: string): Promise<string | undefined> {
