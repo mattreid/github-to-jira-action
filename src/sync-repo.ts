@@ -264,17 +264,25 @@ export class SyncRepository {
         .filter((p) => p !== null)
         .find((p) => p.project.title?.name === this.#projectConfiguration.github.project);
 
+      // Debug: log what we found
+      if (isDebug()) {
+        info(`  🔍 Looking for project: "${this.#projectConfiguration.github.project}"`);
+        info(`  🔍 Found projects: ${JSON.stringify(issue.projectItems.projects.map(p => p?.project?.title?.name))}`);
+        info(`  🔍 ProjectData match: ${projectData ? 'YES' : 'NO'}`);
+        if (projectData) {
+          info(`  🔍 Full projectData: ${JSON.stringify(projectData.project, null, 2)}`);
+        }
+      }
+
       const projectStatus = projectData?.project.status?.name;
       const status = this.getJiraStatusFromGithubProject(projectStatus);
       const storyPoints = projectData?.project.storyPoints?.value;
       const jiraProjectKey = this.#projectConfiguration.jira.projectKey;
 
-      // Debug: log story points value
-      if (isDebug() && storyPoints !== undefined) {
-        info(`  📊 Story Points from GitHub: ${storyPoints}`);
-      } else if (isDebug()) {
-        warning(`  ⚠️  Story Points field is undefined for issue ${issue.number}`);
-        info(`  ProjectData: ${JSON.stringify(projectData?.project, null, 2)}`);
+      // Debug: log story points and status
+      if (isDebug()) {
+        info(`  📊 GitHub status: ${projectStatus || 'undefined'} → Jira status: ${status}`);
+        info(`  📊 Story Points: ${storyPoints ?? 'undefined'}`);
       }
 
       const sprintName = projectData?.project.sprint?.title;
