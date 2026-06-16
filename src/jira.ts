@@ -253,11 +253,24 @@ export class Jira {
   }
 
   async findExistingGithubIssueInJira(remoteId: string): Promise<string | undefined> {
-    // jql to search for an issue having the remote link with globalId (the github issue number)
-    const jql = `issue in issuesWithRemoteLinksByGlobalId("${remoteId}") and project = "${this.#projectConfiguration.jira.projectKey}"`;
-    const query = { jql, maxResults: 1 };
-    const issues = await this.#client.issueSearch.searchForIssuesUsingJql(query);
-    return issues.issues?.[0]?.key;
+    try {
+      // jql to search for an issue having the remote link with globalId (the github issue number)
+      const jql = `issue in issuesWithRemoteLinksByGlobalId("${remoteId}") and project = "${this.#projectConfiguration.jira.projectKey}"`;
+      const query = { jql, maxResults: 1 };
+      const issues = await this.#client.issueSearch.searchForIssuesUsingJql(query);
+      return issues.issues?.[0]?.key;
+    } catch (searchError: unknown) {
+      const error = searchError as { response?: { status?: number } };
+      if (error.response?.status === 410) {
+        // issuesWithRemoteLinksByGlobalId is deprecated in some Jira Cloud instances
+        // Return undefined to create a new issue instead of searching for existing
+        console.warn(
+          `⚠️  Remote links JQL function returned 410 (deprecated). Cannot search for existing issues. Will create new issues.`,
+        );
+        return undefined;
+      }
+      throw searchError;
+    }
   }
 
   async createOrUpdateIssue(createOrUpdateIssueParams: CreateIssueParams): Promise<{ key: string }> {
