@@ -14,3 +14,5 @@ test-staging.sh
 pre-flight-check.sh
 TEST_SETUP.md
 test-templates/
+diagnose-*.mjs
+diagnose-*.sh

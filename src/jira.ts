@@ -307,18 +307,32 @@ export class Jira {
     }
 
     // update the remote link
-    await this.#client.issueRemoteLinks.createOrUpdateRemoteIssueLink({
-      issueIdOrKey: issueKey,
-      globalId: createOrUpdateIssueParams.globalId,
-      object: {
-        url: createOrUpdateIssueParams.remoteLinkUrl,
-        title: createOrUpdateIssueParams.remoteLinkTitle,
-        icon: {
-          url16x16: 'https://github.githubassets.com/favicons/favicon.svg',
-          title: 'GitHub',
+    try {
+      await this.#client.issueRemoteLinks.createOrUpdateRemoteIssueLink({
+        issueIdOrKey: issueKey,
+        globalId: createOrUpdateIssueParams.globalId,
+        object: {
+          url: createOrUpdateIssueParams.remoteLinkUrl,
+          title: createOrUpdateIssueParams.remoteLinkTitle,
+          icon: {
+            url16x16: 'https://github.githubassets.com/favicons/favicon.svg',
+            title: 'GitHub',
+          },
         },
-      },
-    });
+      });
+    } catch (remoteLinkError: unknown) {
+      // Remote links API may return 410 in some Jira Cloud instances
+      // This is not critical - the issue still gets created/updated
+      const error = remoteLinkError as { response?: { status?: number } };
+      if (error.response?.status === 410) {
+        console.warn(
+          `⚠️  Remote link API returned 410 (Gone) for issue ${issueKey}. Issue created but GitHub link not added.`,
+        );
+      } else {
+        // Re-throw other errors
+        throw remoteLinkError;
+      }
+    }
 
     // optional fields that can be defined for updating an issue
     const updateOptionalFields: Record<string, unknown> = {};
