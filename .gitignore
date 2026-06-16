@@ -1,8 +1,10 @@
 run-*.sh
 test-*.local.sh
-lib/
 node_modules/
 sync*.yaml
+
+# macOS system files
+.DS_Store
 
 # Test files (not for commit - contain environment-specific setup)
 test-auth-config.mjs
