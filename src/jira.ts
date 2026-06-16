@@ -379,10 +379,8 @@ export class Jira {
       createOptionalFields[this.#epicNameFieldId] = createOrUpdateIssueParams.title;
     }
 
-    // GitHub Issue URL (for reliable deduplication)
-    if (this.#githubIssueFieldId) {
-      createOptionalFields[this.#githubIssueFieldId] = createOrUpdateIssueParams.remoteLinkUrl;
-    }
+    // GitHub Issue URL will be set during editIssue instead of create
+    // (field may not be on the Create screen)
 
     // create the REST API parameters
     const createParams = {
@@ -454,6 +452,11 @@ export class Jira {
 
     // optional fields that can be defined for updating an issue
     const updateOptionalFields: Record<string, unknown> = {};
+
+    // GitHub Issue URL (for deduplication)
+    if (this.#githubIssueFieldId) {
+      updateOptionalFields[this.#githubIssueFieldId] = createOrUpdateIssueParams.remoteLinkUrl;
+    }
 
     // story points ?
     if (this.#storyPointsFieldId) {
