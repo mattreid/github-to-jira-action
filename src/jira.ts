@@ -365,10 +365,21 @@ export class Jira {
       fixVersions,
     };
 
-    await this.#client.issues.editIssue({
-      issueIdOrKey: issueKey,
-      fields: updateFields,
-    });
+    try {
+      await this.#client.issues.editIssue({
+        issueIdOrKey: issueKey,
+        fields: updateFields,
+      });
+    } catch (editError: unknown) {
+      const error = editError as { response?: { status?: number; data?: unknown } };
+      if (error.response?.status === 410) {
+        console.warn(`⚠️  Edit issue API returned 410 (Gone) for ${issueKey}. Skipping field updates.`);
+        console.warn(`   Fields attempted:`, JSON.stringify(Object.keys(updateFields)));
+        // Continue without the field updates
+      } else {
+        throw editError;
+      }
+    }
 
     // do the transitions for the status
     const toStatus = createOrUpdateIssueParams.status;
