@@ -1,5 +1,5 @@
 import { debug } from '@actions/core';
-import { AgileClient, type Paginated, Version2Client } from 'jira.js';
+import { AgileClient, type Paginated, Version2Client, Version3Client } from 'jira.js';
 import type { Sprint } from 'jira.js/out/agile/models/sprint.js';
 import type { CreateSprint } from 'jira.js/out/agile/parameters/createSprint.js';
 import type { Project } from 'jira.js/out/version2/models/project.js';
@@ -62,6 +62,7 @@ export interface UpdateSprintParams {
 export class Jira {
   #client: Version2Client;
   #agileClient: AgileClient;
+  #clientV3: Version3Client;
 
   #projectConfiguration: ProjectConfiguration;
 
@@ -93,6 +94,7 @@ export class Jira {
 
     this.#client = throttleClient.createProxy(new Version2Client(jiraConfig));
     this.#agileClient = throttleClient.createProxy(new AgileClient(jiraConfig));
+    this.#clientV3 = throttleClient.createProxy(new Version3Client(jiraConfig));
   }
 
   async checkJiraConnection(): Promise<boolean> {
@@ -273,7 +275,7 @@ export class Jira {
   }
 
   private async findExistingIssueByRemoteLinkAPI(remoteId: string): Promise<string | undefined> {
-    // Fallback: Search for issues in the project and check their remote links
+    // Fallback: Search for issues in the project and check their remote links via v3 API
     // This is slower but works when the JQL function is deprecated
     const jql = `project = "${this.#projectConfiguration.jira.projectKey}" ORDER BY created DESC`;
     const query = { jql, maxResults: 100 }; // Check last 100 issues
@@ -281,7 +283,7 @@ export class Jira {
 
     for (const issue of issues.issues || []) {
       try {
-        const remoteLinks = await this.#client.issueRemoteLinks.getRemoteIssueLinks({
+        const remoteLinks = await this.#clientV3.issueRemoteLinks.getRemoteIssueLinks({
           issueIdOrKey: issue.key,
         });
 
@@ -344,9 +346,9 @@ export class Jira {
       issueKey = existingKey;
     }
 
-    // update the remote link
+    // update the remote link using v3 API (v2 is deprecated and returns 410)
     try {
-      await this.#client.issueRemoteLinks.createOrUpdateRemoteIssueLink({
+      await this.#clientV3.issueRemoteLinks.createOrUpdateRemoteIssueLink({
         issueIdOrKey: issueKey,
         globalId: createOrUpdateIssueParams.globalId,
         object: {
@@ -359,7 +361,7 @@ export class Jira {
         },
       });
     } catch (remoteLinkError: unknown) {
-      // Remote links API may return 410 in some Jira Cloud instances
+      // Remote links API may still fail in some configurations
       // This is not critical - the issue still gets created/updated
       const error = remoteLinkError as { response?: { status?: number } };
       if (error.response?.status === 410) {
