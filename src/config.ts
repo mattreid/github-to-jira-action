@@ -137,6 +137,10 @@ export class Configuration {
       const agileProject = this.#githubProjects.get(project.github.project);
       const projectFields: ProjectConfigurationGitHubField[] = [];
 
+      console.log(`🔍 CONFIG: Looking up GitHub project: "${project.github.project}"`);
+      console.log(`🔍 CONFIG: Available projects:`, Array.from(this.#githubProjects.keys()));
+      console.log(`🔍 CONFIG: Found agile project definition:`, agileProject ? 'YES' : 'NO');
+
       if (agileProject) {
         if (agileProject.storyPoints) {
           projectFields.push({
@@ -160,6 +164,8 @@ export class Configuration {
           });
         }
       }
+
+      console.log(`🔍 CONFIG: Built ${projectFields.length} project fields:`, projectFields.map(f => f.alias));
 
       const github: ProjectConfigurationGitHub = {
         owner: project.github.owner,
