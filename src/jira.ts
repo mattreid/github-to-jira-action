@@ -291,47 +291,49 @@ export class Jira {
   }
 
   private async findExistingIssueByCustomField(githubUrl: string): Promise<string | undefined> {
-    // Search using the GitHub Issue custom field (reliable even when remote links API is broken)
-    try {
-      const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND "${this.#githubIssueFieldId}" ~ "${githubUrl}"`;
-      const query = { jql, maxResults: 1 };
-      const issues = await this.#client.issueSearch.searchForIssuesUsingJql(query);
-      const foundKey = issues.issues?.[0]?.key;
-      if (foundKey) {
-        console.log(`Found existing issue ${foundKey} via GitHub Issue custom field`);
-      }
-      return foundKey;
-    } catch (error: unknown) {
-      const err = error as { response?: { status?: number; data?: unknown } };
-      console.warn(
-        `⚠️  GitHub Issue custom field search failed (status ${err.response?.status}). Trying description search...`,
-      );
-      // Fall back to searching description for GitHub URL
-      return await this.findExistingIssueByDescription(githubUrl);
-    }
+    // JQL searches fail with 410 in Jira Cloud - use REST API to paginate and check descriptions
+    console.log(`🔍 Searching for existing issue with URL: ${githubUrl}`);
+    return await this.findExistingIssueByDescription(githubUrl);
   }
 
   private async findExistingIssueByDescription(githubUrl: string): Promise<string | undefined> {
-    // Final fallback: Search description field for GitHub URL
-    // We append URLs to descriptions like: "---\nGitHub: https://github.com/..."
+    // Use REST API pagination instead of JQL (which returns 410)
+    // Fetch recent issues from the project and check descriptions for GitHub URL
     try {
-      const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND description ~ "${githubUrl}" ORDER BY created DESC`;
-      const query = { jql, maxResults: 5 }; // Get a few in case of partial matches
-      const issues = await this.#client.issueSearch.searchForIssuesUsingJql(query);
+      let startAt = 0;
+      const maxResults = 50;
+      const maxIssues = 200; // Only check last 200 issues to avoid performance issues
 
-      // Check each issue's description for an exact URL match
-      for (const issue of issues.issues || []) {
-        if (issue.fields?.description?.includes(githubUrl)) {
-          console.log(`Found existing issue ${issue.key} via description search`);
-          return issue.key;
+      while (startAt < maxIssues) {
+        const issues = await this.#client.issueSearch.searchForIssuesUsingJql({
+          jql: `project = "${this.#projectConfiguration.jira.projectKey}" ORDER BY created DESC`,
+          startAt,
+          maxResults,
+          fields: ['description', 'key'],
+        });
+
+        // Check each issue's description for the GitHub URL
+        for (const issue of issues.issues || []) {
+          const description = issue.fields?.description;
+          if (description && typeof description === 'string' && description.includes(githubUrl)) {
+            console.log(`✅ Found existing issue ${issue.key} via description search`);
+            return issue.key;
+          }
         }
+
+        // Check if there are more results
+        if (!issues.issues || issues.issues.length < maxResults) {
+          break; // No more results
+        }
+
+        startAt += maxResults;
       }
 
-      console.warn(`⚠️  No existing issue found for ${githubUrl}. Will create new issue.`);
+      console.log(`🆕 No existing issue found for ${githubUrl}`);
       return undefined;
     } catch (error: unknown) {
       const err = error as { response?: { status?: number; data?: unknown } };
-      console.warn(`⚠️  Description search failed (status ${err.response?.status}). Will create new issue.`);
+      console.warn(`⚠️  REST API search failed (status ${err.response?.status}). Will create new issue.`);
       return undefined;
     }
   }
@@ -341,7 +343,7 @@ export class Jira {
     // This is slower but works when the JQL function is deprecated
     try {
       const jql = `project = "${this.#projectConfiguration.jira.projectKey}" ORDER BY created DESC`;
-      const query = { jql, maxResults: 100 }; // Check last 100 issues
+      const query = { jql, maxResults: 100, fields: ['key'] }; // Only need key field
       const issues = await this.#client.issueSearch.searchForIssuesUsingJql(query);
 
       for (const issue of issues.issues || []) {
