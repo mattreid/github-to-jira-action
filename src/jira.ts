@@ -313,6 +313,42 @@ export class Jira {
   }
 
   /**
+   * Extract plain text from Atlassian Document Format (ADF) or return string as-is
+   */
+  private extractTextFromDescription(description: unknown): string {
+    if (typeof description === 'string') {
+      return description;
+    }
+
+    // ADF format: {type: 'doc', content: [...], version: 1}
+    if (description && typeof description === 'object' && 'content' in description) {
+      const adf = description as { content?: Array<{ content?: Array<{ text?: string }> }> };
+      const texts: string[] = [];
+
+      // Recursively extract text nodes
+      const extractText = (node: unknown): void => {
+        if (!node || typeof node !== 'object') return;
+
+        if ('text' in node && typeof node.text === 'string') {
+          texts.push(node.text);
+        }
+
+        if ('content' in node && Array.isArray(node.content)) {
+          node.content.forEach(extractText);
+        }
+      };
+
+      if (Array.isArray(adf.content)) {
+        adf.content.forEach(extractText);
+      }
+
+      return texts.join(' ');
+    }
+
+    return '';
+  }
+
+  /**
    * Try JQL-based description search (fast but may fail with 410)
    */
   private async tryJqlDescriptionSearch(githubUrl: string): Promise<string | undefined> {
@@ -327,7 +363,8 @@ export class Jira {
 
       // Check each result for exact URL match in description
       for (const issue of issues.issues || []) {
-        if (issue.fields?.description?.includes(githubUrl)) {
+        const descText = this.extractTextFromDescription(issue.fields?.description);
+        if (descText.includes(githubUrl)) {
           return issue.key;
         }
       }
@@ -383,12 +420,9 @@ export class Jira {
       // Filter client-side by checking description field
       const matches: string[] = [];
       for (const issue of response.issues) {
-        const description = issue.fields?.description;
-        if (description && typeof description === 'string') {
-          // Check if description contains the exact GitHub URL
-          if (description.includes(githubUrl)) {
-            matches.push(issue.key);
-          }
+        const descText = this.extractTextFromDescription(issue.fields?.description);
+        if (descText && descText.includes(githubUrl)) {
+          matches.push(issue.key);
         }
       }
 
