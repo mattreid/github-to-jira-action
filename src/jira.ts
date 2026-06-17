@@ -276,7 +276,7 @@ export class Jira {
       // Try the JQL function first (works in some Jira Cloud instances)
       const jql = `issue in issuesWithRemoteLinksByGlobalId("${remoteId}") and project = "${this.#projectConfiguration.jira.projectKey}"`;
       const query = { jql, maxResults: 1 };
-      const issues = await this.#client.issueSearch.searchForIssuesUsingJql(query);
+      const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJql(query);
       return issues.issues?.[0]?.key;
     } catch (searchError: unknown) {
       const error = searchError as { response?: { status?: number } };
@@ -319,7 +319,7 @@ export class Jira {
     try {
       // Use simple JQL to search description field
       const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND description ~ "${githubUrl}" ORDER BY created DESC`;
-      const issues = await this.#client.issueSearch.searchForIssuesUsingJql({
+      const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJql({
         jql,
         maxResults: 5,
         fields: ['description', 'key'],
@@ -359,7 +359,7 @@ export class Jira {
       // CRITICAL: Order by UPDATED, not CREATED
       // This ensures old Jira issues that were recently updated in GitHub
       // will still appear in the search window
-      const response = await this.#client.issueSearch.searchForIssuesUsingJql({
+      const response = await this.#clientV3.issueSearch.searchForIssuesUsingJql({
         jql: `project = "${this.#projectConfiguration.jira.projectKey}" ORDER BY updated DESC`, // ← ORDER BY UPDATED
         maxResults: 100, // Last 100 UPDATED issues (not created)
         fields: ['description', 'key', 'created', 'updated'],
@@ -427,7 +427,7 @@ export class Jira {
     try {
       const jql = `project = "${this.#projectConfiguration.jira.projectKey}" ORDER BY created DESC`;
       const query = { jql, maxResults: 100, fields: ['key'] }; // Only need key field
-      const issues = await this.#client.issueSearch.searchForIssuesUsingJql(query);
+      const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJql(query);
 
       for (const issue of issues.issues || []) {
         try {
