@@ -304,10 +304,34 @@ export class Jira {
     } catch (error: unknown) {
       const err = error as { response?: { status?: number; data?: unknown } };
       console.warn(
-        `⚠️  GitHub Issue custom field search failed (status ${err.response?.status}). Will create new issue.`,
+        `⚠️  GitHub Issue custom field search failed (status ${err.response?.status}). Trying description search...`,
       );
-      console.warn(`   JQL: project = "${this.#projectConfiguration.jira.projectKey}" AND "${this.#githubIssueFieldId}" ~ "${githubUrl}"`);
-      // Return undefined to create a new issue
+      // Fall back to searching description for GitHub URL
+      return await this.findExistingIssueByDescription(githubUrl);
+    }
+  }
+
+  private async findExistingIssueByDescription(githubUrl: string): Promise<string | undefined> {
+    // Final fallback: Search description field for GitHub URL
+    // We append URLs to descriptions like: "---\nGitHub: https://github.com/..."
+    try {
+      const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND description ~ "${githubUrl}" ORDER BY created DESC`;
+      const query = { jql, maxResults: 5 }; // Get a few in case of partial matches
+      const issues = await this.#client.issueSearch.searchForIssuesUsingJql(query);
+
+      // Check each issue's description for an exact URL match
+      for (const issue of issues.issues || []) {
+        if (issue.fields?.description?.includes(githubUrl)) {
+          console.log(`Found existing issue ${issue.key} via description search`);
+          return issue.key;
+        }
+      }
+
+      console.warn(`⚠️  No existing issue found for ${githubUrl}. Will create new issue.`);
+      return undefined;
+    } catch (error: unknown) {
+      const err = error as { response?: { status?: number; data?: unknown } };
+      console.warn(`⚠️  Description search failed (status ${err.response?.status}). Will create new issue.`);
       return undefined;
     }
   }
