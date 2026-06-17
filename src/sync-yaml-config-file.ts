@@ -17,6 +17,11 @@ export interface SyncYamlGitHubProject {
     fieldName: string;
     type: SyncYamlGitHubProjectFieldType;
   };
+
+  priority?: {
+    fieldName: string;
+    type: SyncYamlGitHubProjectFieldType;
+  };
 }
 
 export interface SyncYamStatusTypeMappingDefinition {
@@ -28,6 +33,17 @@ export interface SyncYamStatusTypeMapping {
   name: string;
   default: string;
   mapping: SyncYamStatusTypeMappingDefinition[];
+}
+
+export interface SyncYamPriorityTypeMappingDefinition {
+  fromGithub: string;
+  toJira: string;
+}
+
+export interface SyncYamPriorityTypeMapping {
+  name: string;
+  default: string;
+  mapping: SyncYamPriorityTypeMappingDefinition[];
 }
 
 export interface SyncYamlIssuesTypeMappingDefinition {
@@ -52,6 +68,7 @@ export interface SyncYamlSyncProject {
   useMapping: {
     issueType: string;
     statusType: string;
+    priorityType?: string;
   };
   jira: {
     projectKey: string;
@@ -66,6 +83,8 @@ export interface SyncYaml {
   githubProjects: SyncYamlGitHubProject[];
 
   statusTypeMappings: SyncYamStatusTypeMapping[];
+
+  priorityTypeMappings: SyncYamPriorityTypeMapping[];
 
   issuesTypeMappings: SyncYamlIssuesTypeMapping[];
 

@@ -277,12 +277,15 @@ export class SyncRepository {
       const projectStatus = projectData?.project.status?.name;
       const status = this.getJiraStatusFromGithubProject(projectStatus);
       const storyPoints = projectData?.project.storyPoints?.value;
+      const githubPriority = projectData?.project.priority?.name;
+      const priority = this.getJiraPriorityFromGithubProject(githubPriority);
       const jiraProjectKey = this.#projectConfiguration.jira.projectKey;
 
-      // Debug: log story points and status
+      // Debug: log story points, status, and priority
       if (isDebug()) {
         info(`  📊 GitHub status: ${projectStatus || 'undefined'} → Jira status: ${status}`);
         info(`  📊 Story Points: ${storyPoints ?? 'undefined'}`);
+        info(`  🎯 GitHub priority: ${githubPriority || 'undefined'} → Jira priority: ${priority || 'undefined'}`);
       }
 
       const sprintName = projectData?.project.sprint?.title;
@@ -306,6 +309,7 @@ export class SyncRepository {
         remoteLinkUrl: issue.url,
         remoteLinkTitle,
         jiraProjectKey,
+        priority,
       };
 
       if (storyPoints) {
@@ -385,5 +389,27 @@ export class SyncRepository {
 
     // not found, default
     return this.#projectConfiguration.statusTypeDefault;
+  }
+
+  /**
+   * Gets the Jira priority from the GitHub project priority
+   * @param githubPriority the GitHub project priority value
+   * @returns matching Jira priority or the default one
+   */
+  getJiraPriorityFromGithubProject(githubPriority?: string): string | undefined {
+    // If no priority mapping configured, return undefined (don't set priority)
+    if (!this.#projectConfiguration.priorityTypeMapping) {
+      return undefined;
+    }
+
+    // Search for matching priority mapping
+    for (const mapping of this.#projectConfiguration.priorityTypeMapping) {
+      if (githubPriority === mapping.fromGithub) {
+        return mapping.toJira;
+      }
+    }
+
+    // Fall back to default if no mapping found
+    return this.#projectConfiguration.priorityTypeDefault;
   }
 }

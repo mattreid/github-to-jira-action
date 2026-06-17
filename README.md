@@ -41,6 +41,9 @@ githubProjects:
     sprint:
       fieldName: Sprint
       type: iteration
+    priority:                    # Optional - omit if not syncing priority
+      fieldName: Priority
+      type: singleSelect
 
 statusTypeMappings:
   - name: My Status Mapping
@@ -58,6 +61,17 @@ statusTypeMappings:
         toJira: Backlog
       - fromGithub: ✔️ Done
         toJira: Closed
+
+priorityTypeMappings:           # Optional - omit if not syncing priority
+  - name: My Priority Mapping
+    default: Normal              # Default Jira priority when no mapping matches
+    mapping:
+      - fromGithub: 🔴 High     # Exact GitHub priority value
+        toJira: Critical         # Jira priority name (depends on your Jira instance)
+      - fromGithub: 🟡 Medium
+        toJira: Major
+      - fromGithub: 🟢 Low
+        toJira: Minor
 
 issuesTypeMappings:
   - name: My Issue Mapping
@@ -84,6 +98,7 @@ syncProjects:
     useMapping:
      issueType: My Issue Mapping
      statusType: My Status Mapping
+     priorityType: My Priority Mapping  # Optional - omit if not syncing priority
     jira:
       projectKey: MY-JIRA-PROJECT-KEY
       component: My Component
@@ -99,10 +114,19 @@ syncProjects:
   - **storyPoints**: The field used to map story points.
   - **status**: The GitHub status field that corresponds to Jira statuses.
   - **sprint**: Maps the sprint between GitHub and Jira.
+  - **priority** (optional): Maps GitHub priority values to Jira priority names.
 
 - **statusTypeMappings**: Defines how GitHub issue statuses are mapped to Jira statuses.
   - **default**: Default Jira status if no mapping is found.
   - **mapping**: Individual mappings for GitHub to Jira status.
+
+- **priorityTypeMappings** (optional): Defines how GitHub project priority values are mapped to Jira priorities.
+  - **default**: Default Jira priority when no mapping matches.
+  - **mapping**: Individual mappings for GitHub to Jira priority.
+  - **Note**: Available Jira priorities depend on your instance configuration. Common values include:
+    - Default scheme: Highest, High, Medium, Low, Lowest
+    - Custom scheme example: Undefined, Blocker, Critical, Major, Normal, Minor
+  - Check your Jira project settings → Issue types → Priority to see available values.
 
 - **issuesTypeMappings**: Maps GitHub issue labels to Jira issue types.
   - **default**: The default Jira issue type for unmapped issues.

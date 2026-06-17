@@ -41,6 +41,9 @@ export interface GraphQLSearchIssuesNode {
         storyPoints: {
           value: number;
         };
+        priority?: {
+          name: string;
+        };
       };
     }[];
   };

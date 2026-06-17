@@ -25,6 +25,7 @@ export interface CreateIssueParams {
   storyPoints?: number;
   fixVersionId?: string;
   sprintBoardId?: number;
+  priority?: string;
   jiraProjectKey: string;
 
   globalId: string;
@@ -419,6 +420,12 @@ export class Jira {
         issuetype: {
           name: createOrUpdateIssueParams.issuetype,
         },
+        // Add priority if configured and provided
+        ...(createOrUpdateIssueParams.priority && {
+          priority: {
+            name: createOrUpdateIssueParams.priority,
+          },
+        }),
       },
     };
 

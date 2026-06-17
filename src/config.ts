@@ -4,6 +4,7 @@ import moment from 'moment';
 import type {
   SyncStateYaml,
   SyncYamStatusTypeMappingDefinition,
+  SyncYamPriorityTypeMappingDefinition,
   SyncYaml,
   SyncYamlGitHubProject,
   SyncYamlIssuesTypeMappingDefinition,
@@ -48,6 +49,8 @@ export interface ProjectConfiguration {
   issueTypeMapping: SyncYamlIssuesTypeMappingDefinition[];
   statusTypeMapping: SyncYamStatusTypeMappingDefinition[];
   statusTypeDefault: string;
+  priorityTypeMapping?: SyncYamPriorityTypeMappingDefinition[];
+  priorityTypeDefault?: string;
 
   maxBatchNumberIssues: number;
 }
@@ -61,6 +64,7 @@ export class Configuration {
   #syncStateYaml: SyncStateYaml | undefined;
 
   #statusTypeMappings: Map<string, SyncYamStatusTypeMappingDefinition[]>;
+  #priorityTypeMappings: Map<string, SyncYamPriorityTypeMappingDefinition[]>;
   #issueTypeMappings: Map<string, SyncYamlIssuesTypeMappingDefinition[]>;
   #githubProjects: Map<string, SyncYamlGitHubProject>;
 
@@ -79,6 +83,7 @@ export class Configuration {
     this.#syncYaml = params.syncYaml;
     this.#syncStateYaml = params.syncStateYaml;
     this.#statusTypeMappings = new Map();
+    this.#priorityTypeMappings = new Map();
     this.#issueTypeMappings = new Map();
     this.#githubProjects = new Map();
   }
@@ -91,6 +96,11 @@ export class Configuration {
     // build a a map from statusTypeMappings
     for (const mappingObj of this.#syncYaml.statusTypeMappings) {
       this.#statusTypeMappings.set(mappingObj.name, mappingObj.mapping);
+    }
+
+    // build a map from priorityTypeMappings
+    for (const mappingObj of this.#syncYaml.priorityTypeMappings) {
+      this.#priorityTypeMappings.set(mappingObj.name, mappingObj.mapping);
     }
 
     // build a map from issuesTypeMappings
@@ -163,6 +173,13 @@ export class Configuration {
             type: this.getFieldTypeFromYaml(agileProject.sprint.type),
           });
         }
+        if (agileProject.priority) {
+          projectFields.push({
+            alias: 'priority',
+            fieldName: agileProject.priority.fieldName,
+            type: this.getFieldTypeFromYaml(agileProject.priority.type),
+          });
+        }
       }
 
       console.log(`🔍 CONFIG: Built ${projectFields.length} project fields:`, projectFields.map(f => f.alias));
@@ -197,6 +214,16 @@ export class Configuration {
       const statusTypeDefault = this.#syncYaml.statusTypeMappings.find(
         (mapping) => mapping.name === project.useMapping.statusType,
       )?.default;
+
+      let priorityTypeMapping: SyncYamPriorityTypeMappingDefinition[] | undefined;
+      let priorityTypeDefault: string | undefined;
+      if (project.useMapping.priorityType) {
+        priorityTypeMapping = this.#priorityTypeMappings.get(project.useMapping.priorityType);
+        priorityTypeDefault = this.#syncYaml.priorityTypeMappings.find(
+          (mapping) => mapping.name === project.useMapping.priorityType,
+        )?.default;
+      }
+
       if (!issueTypeMapping) {
         throw new Error(`Issue type mapping not found for ${project.name}`);
       }
@@ -222,6 +249,8 @@ export class Configuration {
         issueTypeMapping,
         statusTypeMapping,
         statusTypeDefault,
+        priorityTypeMapping,
+        priorityTypeDefault,
       };
 
       return projectConfiguration;
