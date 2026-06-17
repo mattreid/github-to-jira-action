@@ -292,49 +292,131 @@ export class Jira {
   }
 
   private async findExistingIssueByCustomField(githubUrl: string): Promise<string | undefined> {
-    // JQL searches fail with 410 in Jira Cloud - use REST API to paginate and check descriptions
     console.log(`🔍 Searching for existing issue with URL: ${githubUrl}`);
-    return await this.findExistingIssueByDescription(githubUrl);
+
+    // Try 1: Simple JQL search (fastest if it works)
+    const jqlResult = await this.tryJqlDescriptionSearch(githubUrl);
+    if (jqlResult) {
+      console.log(`✅ Found existing issue ${jqlResult} via JQL search`);
+      return jqlResult;
+    }
+
+    // Try 2: Fetch recent issues without JQL and filter client-side
+    const clientSideResult = await this.findByClientSideFiltering(githubUrl);
+    if (clientSideResult) {
+      console.log(`✅ Found existing issue ${clientSideResult} via client-side filtering`);
+      return clientSideResult;
+    }
+
+    console.log(`🆕 No existing issue found for ${githubUrl}`);
+    return undefined;
   }
 
-  private async findExistingIssueByDescription(githubUrl: string): Promise<string | undefined> {
-    // Use REST API pagination instead of JQL (which returns 410)
-    // Fetch recent issues from the project and check descriptions for GitHub URL
+  /**
+   * Try JQL-based description search (fast but may fail with 410)
+   */
+  private async tryJqlDescriptionSearch(githubUrl: string): Promise<string | undefined> {
     try {
-      let startAt = 0;
-      const maxResults = 50;
-      const maxIssues = 200; // Only check last 200 issues to avoid performance issues
+      // Use simple JQL to search description field
+      const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND description ~ "${githubUrl}" ORDER BY created DESC`;
+      const issues = await this.#client.issueSearch.searchForIssuesUsingJql({
+        jql,
+        maxResults: 5,
+        fields: ['description', 'key'],
+      });
 
-      while (startAt < maxIssues) {
-        const issues = await this.#client.issueSearch.searchForIssuesUsingJql({
-          jql: `project = "${this.#projectConfiguration.jira.projectKey}" ORDER BY created DESC`,
-          startAt,
-          maxResults,
-          fields: ['description', 'key'],
-        });
-
-        // Check each issue's description for the GitHub URL
-        for (const issue of issues.issues || []) {
-          const description = issue.fields?.description;
-          if (description && typeof description === 'string' && description.includes(githubUrl)) {
-            console.log(`✅ Found existing issue ${issue.key} via description search`);
-            return issue.key;
-          }
+      // Check each result for exact URL match in description
+      for (const issue of issues.issues || []) {
+        if (issue.fields?.description?.includes(githubUrl)) {
+          return issue.key;
         }
+      }
+    } catch (error: unknown) {
+      const err = error as { response?: { status?: number } };
+      if (err.response?.status === 410) {
+        console.warn(`⚠️  JQL search returned 410 (deprecated). Falling back to client-side filtering...`);
+        return undefined; // Fallback to next method
+      }
+      // Non-410 errors - log and fallback
+      console.error(`❌ JQL search error (status ${err.response?.status}):`, err);
+      return undefined; // Fallback on any error
+    }
 
-        // Check if there are more results
-        if (!issues.issues || issues.issues.length < maxResults) {
-          break; // No more results
-        }
+    return undefined;
+  }
 
-        startAt += maxResults;
+  /**
+   * Fetch recent issues via REST API without JQL and filter client-side
+   * This works even when JQL is completely broken in Jira Cloud
+   *
+   * IMPORTANT: Orders by UPDATED date, not CREATED date, so old issues that get
+   * updated in GitHub will still be found in the recent issues list
+   */
+  private async findByClientSideFiltering(githubUrl: string): Promise<string | undefined> {
+    try {
+      console.log(`🔍 Fetching recent issues for client-side filtering...`);
+
+      // CRITICAL: Order by UPDATED, not CREATED
+      // This ensures old Jira issues that were recently updated in GitHub
+      // will still appear in the search window
+      const response = await this.#client.issueSearch.searchForIssuesUsingJql({
+        jql: `project = "${this.#projectConfiguration.jira.projectKey}" ORDER BY updated DESC`, // ← ORDER BY UPDATED
+        maxResults: 100, // Last 100 UPDATED issues (not created)
+        fields: ['description', 'key', 'created', 'updated'],
+        validateQuery: 'none', // Skip JQL validation
+      });
+
+      if (!response.issues || response.issues.length === 0) {
+        console.warn(`⚠️  No issues returned from project ${this.#projectConfiguration.jira.projectKey}`);
+        return undefined;
       }
 
-      console.log(`🆕 No existing issue found for ${githubUrl}`);
-      return undefined;
+      console.log(`📊 Checking ${response.issues.length} recently updated issues for GitHub URL...`);
+
+      // Log warning if approaching limit
+      if (response.issues.length >= 95) {
+        console.warn(
+          `⚠️  Approaching search limit (${response.issues.length}/100). Consider increasing maxResults.`,
+        );
+      }
+
+      // Filter client-side by checking description field
+      const matches: string[] = [];
+      for (const issue of response.issues) {
+        const description = issue.fields?.description;
+        if (description && typeof description === 'string') {
+          // Check if description contains the exact GitHub URL
+          if (description.includes(githubUrl)) {
+            matches.push(issue.key);
+          }
+        }
+      }
+
+      // Handle duplicate matches (e.g., test data with multiple issues for same GitHub URL)
+      if (matches.length === 0) {
+        console.log(`🔍 No match found in ${response.issues.length} recently updated issues`);
+        return undefined;
+      } else if (matches.length === 1) {
+        console.log(`✅ Match found in ${matches[0]} description`);
+        return matches[0];
+      } else {
+        // Multiple duplicates found - use the most recently updated one
+        console.warn(`⚠️  Found ${matches.length} duplicate Jira issues for ${githubUrl}: ${matches.join(', ')}`);
+        console.warn(`   Using the first one (most recently updated): ${matches[0]}`);
+        console.warn(`   This suggests manual cleanup is needed in Jira to remove duplicates.`);
+        return matches[0]; // First match = most recently updated (ORDER BY updated DESC)
+      }
     } catch (error: unknown) {
       const err = error as { response?: { status?: number; data?: unknown } };
-      console.warn(`⚠️  REST API search failed (status ${err.response?.status}). Will create new issue.`);
+
+      // Even simple project search failed - last resort
+      if (err.response?.status === 410) {
+        console.error(`❌ Even basic Jira API calls return 410. Deduplication impossible.`);
+        console.error(`   This Jira instance may have API restrictions. Creating new issue.`);
+        return undefined;
+      }
+
+      console.error(`❌ Client-side filtering failed (status ${err.response?.status}):`, err.response?.data);
       return undefined;
     }
   }
