@@ -1,0 +1,256 @@
+# Example sync.yaml showing both basic and full sync modes
+# This demonstrates syncing multiple repos with different modes in one configuration
+
+# ============================================================================
+# GitHub Projects v2 Board Definitions
+# ============================================================================
+# Only needed for repos using syncMode: full (Projects v2 integration)
+# Define the custom fields available in your GitHub Projects v2 boards
+
+githubProjects:
+  - name: Internal Sprint Board  # Must match your Projects v2 board name exactly
+    storyPoints:
+      fieldName: Story Points
+      type: number
+    status:
+      fieldName: Status
+      type: singleSelect
+    sprint:
+      fieldName: Iteration
+      type: iteration
+    priority:
+      fieldName: Priority
+      type: singleSelect
+
+# ============================================================================
+# Mapping Definitions
+# ============================================================================
+# These mappings are used by both basic and full sync modes
+
+# Status mappings: GitHub → Jira
+statusTypeMappings:
+  - name: Standard Status Mapping
+    default: To Do
+    mapping:
+      # Full mode: Maps from Projects v2 board status values
+      - fromGithub: Todo
+        toJira: To Do
+      - fromGithub: In Progress
+        toJira: In Progress
+      - fromGithub: Done
+        toJira: Closed
+
+# Issue type mappings: GitHub labels → Jira issue types
+issuesTypeMappings:
+  - name: Standard Issue Mapping
+    default: Task
+    mapping:
+      - fromGithubLabel: bug
+        toJira: Bug
+      - fromGithubLabel: story
+        toJira: Story
+      - fromGithubLabel: task
+        toJira: Task
+      - fromGithubLabel: epic
+        toJira: Epic
+
+# Priority mappings: GitHub → Jira (optional, for full mode)
+priorityTypeMappings:
+  - name: Standard Priority Mapping
+    default: Normal
+    mapping:
+      - fromGithub: P0
+        toJira: Critical
+      - fromGithub: P1
+        toJira: Major
+      - fromGithub: P2
+        toJira: Minor
+
+# ============================================================================
+# Sync Projects - Mix of Basic and Full Mode
+# ============================================================================
+
+syncProjects:
+  # --------------------------------------------------------------------------
+  # Example 1: BASIC MODE - External Public Repo (No Projects v2)
+  # --------------------------------------------------------------------------
+  # Use case: Sync issues from external org you don't have admin access to
+  # No GitHub token required (or basic token without read:project for 5000/hr)
+
+  - name: "Kubernetes - Platform Team Work"
+    github:
+      owner: kubernetes
+      repo: kubernetes
+      afterDate: "2026-06-01T00:00:00Z"
+
+      # BASIC MODE: No Projects v2, uses REST API
+      syncMode: basic
+
+      # Filter to only team-assigned issues
+      assigneeWhitelist:
+        - alice
+        - bob
+        - charlie
+
+    useMapping:
+      issueType: Standard Issue Mapping
+      statusType: Standard Status Mapping
+
+    jira:
+      projectKey: K8S
+      component: External
+      globalIdPrefix: K8S
+      sprintBoard: ""  # Not used in basic mode
+
+    maxBatchSize: 50
+
+  # --------------------------------------------------------------------------
+  # Example 2: BASIC MODE - External Public Repo with Label Filtering
+  # --------------------------------------------------------------------------
+  # Use case: Track specific issues from community repos
+
+  - name: "Prometheus - Critical Issues"
+    github:
+      owner: prometheus
+      repo: prometheus
+      afterDate: "2026-06-01T00:00:00Z"
+      syncMode: basic
+
+      # Could also filter by labels in sync logic (future enhancement)
+      assigneeWhitelist:
+        - yourteam-member
+
+    useMapping:
+      issueType: Standard Issue Mapping
+      statusType: Standard Status Mapping
+
+    jira:
+      projectKey: PROM
+      component: Upstream
+      globalIdPrefix: PROM
+      sprintBoard: ""
+
+    maxBatchSize: 30
+
+  # --------------------------------------------------------------------------
+  # Example 3: FULL MODE - Internal Repo with Projects v2
+  # --------------------------------------------------------------------------
+  # Use case: Your own repo with full Projects v2 integration
+  # Requires GitHub token with read:project scope
+
+  - name: "Internal Product - Full Sync"
+    github:
+      owner: yourcompany
+      repo: product-api
+      afterDate: "2026-06-01T00:00:00Z"
+
+      # FULL MODE: Sync Projects v2 metadata
+      syncMode: full
+
+      # Projects v2 board name (must match githubProjects definition above)
+      projectsV2Board: Internal Sprint Board
+
+      # Optional: Still can filter by assignee even in full mode
+      # assigneeWhitelist:
+      #   - team-member-1
+
+    useMapping:
+      issueType: Standard Issue Mapping
+      statusType: Standard Status Mapping
+      priorityType: Standard Priority Mapping
+
+    jira:
+      projectKey: PROD
+      component: Backend
+      globalIdPrefix: PROD
+      sprintBoard: Product Sprint Board  # Jira board name for sprint sync
+
+    maxBatchSize: 100
+
+  # --------------------------------------------------------------------------
+  # Example 4: FULL MODE - Partner Org (They gave you access)
+  # --------------------------------------------------------------------------
+  # Use case: Partner org installed your action or gave you read:project token
+
+  - name: "Partner Project - Full Access"
+    github:
+      owner: partner-corp
+      repo: shared-component
+      afterDate: "2026-06-01T00:00:00Z"
+      syncMode: full
+      projectsV2Board: Partner Sprint Board
+
+      assigneeWhitelist:
+        - your-team-member
+
+    useMapping:
+      issueType: Standard Issue Mapping
+      statusType: Standard Status Mapping
+
+    jira:
+      projectKey: PART
+      component: Partner Integration
+      globalIdPrefix: PART
+      sprintBoard: Partner Board
+
+    maxBatchSize: 50
+
+  # --------------------------------------------------------------------------
+  # Example 5: BASIC MODE - Your Own Public Repo (Simple Tracking)
+  # --------------------------------------------------------------------------
+  # Use case: Your public repo where you don't need Projects v2 complexity
+
+  - name: "Public Tools Repo - Simple Sync"
+    github:
+      owner: yourcompany
+      repo: public-tools
+      afterDate: "2026-06-01T00:00:00Z"
+      syncMode: basic  # Even though you own it, basic mode is simpler
+
+    useMapping:
+      issueType: Standard Issue Mapping
+      statusType: Standard Status Mapping
+
+    jira:
+      projectKey: TOOLS
+      component: Open Source
+      globalIdPrefix: TOOLS
+      sprintBoard: ""
+
+    maxBatchSize: 20
+
+# ============================================================================
+# Notes
+# ============================================================================
+#
+# BASIC MODE:
+#   - Uses GitHub REST API (no GraphQL)
+#   - No read:project token scope required
+#   - Works with public repos without any GitHub token (60 req/hr)
+#   - Or with basic token (public_repo scope) for 5000 req/hr
+#   - Syncs: title, body, state, labels, milestone, assignees
+#   - Does NOT sync: story points, board status, sprints, priority from Projects v2
+#   - Status derived from issue state: open → To Do, closed → Closed
+#   - Resolution mapped from state_reason: completed → Done, not_planned → Won't Do
+#
+# FULL MODE:
+#   - Uses GitHub GraphQL API
+#   - Requires read:project token scope
+#   - Syncs ALL basic fields PLUS Projects v2 custom fields
+#   - Syncs: story points, board status, sprints, priority
+#   - Requires projectsV2Board to match a githubProjects definition
+#
+# FILTERING (works in both modes):
+#   - assigneeWhitelist: Only sync issues assigned to listed users
+#   - Server-side filtering for efficiency (reduces API calls ~50x)
+#
+# INCREMENTAL SYNC (automatic):
+#   - First run: Syncs all issues since afterDate
+#   - Subsequent runs: Only syncs issues updated since last run
+#   - State saved to sync-state.yaml
+#   - Reduces API usage by 10-20x after initial sync
+#
+# DRY-RUN MODE:
+#   - Set DRY_RUN=true environment variable
+#   - Shows what would be synced without modifying Jira
+#   - Perfect for testing new configurations
