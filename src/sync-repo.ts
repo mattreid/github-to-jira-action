@@ -297,6 +297,11 @@ export class SyncRepository {
       let priority: string | undefined;
       let sprintBoardId: number | undefined;
 
+      // Get issue state and state_reason (available in both REST and GraphQL)
+      const issueState = 'state' in issue ? issue.state : 'open';
+      const stateReason = 'stateReason' in issue ? issue.stateReason :
+                          'state_reason' in issue ? issue.state_reason : null;
+
       if (syncMode === 'full') {
         // Full mode: Extract Projects v2 fields (GraphQL)
         // ignore null projects that can be returned by the GrapQH query
@@ -328,11 +333,28 @@ export class SyncRepository {
         if (sprintName) {
           sprintBoardId = this.#sprints.get(sprintName);
         }
+
+        // Map state_reason to resolution (works for both modes!)
+        if (issueState === 'closed') {
+          switch (stateReason) {
+            case 'completed':
+              resolution = 'Done';
+              break;
+            case 'not_planned':
+              resolution = "Won't Do";
+              break;
+            case 'duplicate':
+              resolution = 'Duplicate';
+              break;
+            default:
+              // Fallback for null or unknown reasons
+              resolution = 'Done';
+          }
+        } else {
+          resolution = undefined; // Open issues are unresolved
+        }
       } else {
         // Basic mode: Derive from issue state and state_reason (REST API)
-        const issueState = 'state' in issue ? issue.state : 'open';
-        const stateReason = 'state_reason' in issue ? issue.state_reason : null;
-
         if (issueState === 'open') {
           status = 'To Do';
           resolution = undefined; // Open issues are unresolved
@@ -374,9 +396,6 @@ export class SyncRepository {
       // convert the body from Markdown to Jira (handle null body)
       const issueBody = issue.body || '';
       const body = jira2md.default.to_jira(issueBody);
-
-      // Get the state field (different names in REST vs GraphQL)
-      const issueState = 'state' in issue ? issue.state : 'open';
 
       // data to create the issue in Jira
       const issueToCreate: CreateIssueParams = {

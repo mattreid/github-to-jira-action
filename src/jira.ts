@@ -175,9 +175,9 @@ export class Jira {
     const githubIssueField = fields.find((field) => field.name === 'GitHub Issue');
     if (githubIssueField && githubIssueField.id) {
       this.#githubIssueFieldId = githubIssueField.id;
-      console.log(`Found GitHub Issue field: ${githubIssueField.id}`);
+      info(`✅ Found GitHub Issue custom field (enables reliable deduplication): ${githubIssueField.id}`);
     } else {
-      console.warn('GitHub Issue field not found - will use remote links API for deduplication (may be unreliable)');
+      info('ℹ️  GitHub Issue custom field not found - using remote links API for deduplication');
     }
   }
 

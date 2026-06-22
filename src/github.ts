@@ -21,6 +21,7 @@ export interface GraphQLSearchIssuesNode {
   url: string;
   number: number;
   state: string;
+  stateReason?: string;
   updatedAt: string;
   body: string;
   title: string;
@@ -321,6 +322,7 @@ query getRecentIssues($cursorAfter: String) {
           updatedAt
           body
           state
+          stateReason
           title
           milestone {
             id
