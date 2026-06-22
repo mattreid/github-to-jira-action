@@ -1,4 +1,4 @@
-import { debug } from '@actions/core';
+import { debug, info } from '@actions/core';
 import { AgileClient, type Paginated, Version2Client, Version3Client } from 'jira.js';
 import type { Sprint } from 'jira.js/out/agile/models/sprint.js';
 import type { CreateSprint } from 'jira.js/out/agile/parameters/createSprint.js';
