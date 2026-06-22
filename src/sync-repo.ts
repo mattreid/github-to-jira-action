@@ -143,7 +143,7 @@ export class SyncRepository {
       // keep only the projects not null
       .filter((p) => p !== null)
       .filter((p) => p.project.sprint !== undefined)
-      .filter((p) => p.project.title?.name === this.#projectConfiguration.github.project);
+      .filter((p) => p.project.title?.name === this.#projectConfiguration.github.projectsV2Board);
 
     // keep only .project.sprint fields that are defined
     const githubSprints = filteredGithubSprints
@@ -220,29 +220,61 @@ export class SyncRepository {
     info('Grab recent issues being updated...');
     const recentIssuesSearch = await this.#github.getIssuesUpdatedAfter();
 
-    info('Sync releases...');
-    await this.syncReleases(recentIssuesSearch.issues);
+    const syncMode = this.#projectConfiguration.github.syncMode || 'full';
 
-    info('Sync sprint...');
-    await this.syncSprints(recentIssuesSearch.issues);
+    // Only sync releases and sprints in full mode (they come from Projects v2)
+    if (syncMode === 'basic') {
+      info('ℹ️  Basic mode: Skipping releases and sprints sync (not available without Projects v2)');
+    } else if (this.#projectConfiguration.dryRun) {
+      info('🔍 [DRY RUN] Skipping releases and sprints sync');
+    } else {
+      info('Sync releases...');
+      await this.syncReleases(recentIssuesSearch.issues);
+
+      info('Sync sprint...');
+      await this.syncSprints(recentIssuesSearch.issues);
+    }
 
     endGroup();
 
     startGroup('🚀 Create or update issues in Jira...');
 
+    const assigneeWhitelist = this.#projectConfiguration.github.assigneeWhitelist;
+
     // for each issue
     for (const issue of recentIssuesSearch.issues) {
+      // Assignee filtering (works for both basic and full mode)
+      if (assigneeWhitelist && assigneeWhitelist.length > 0) {
+        const assignees = 'assignees' in issue
+          ? issue.assignees.map(a => a.login)
+          : []; // GraphQL doesn't have assignees field in our current query
+
+        const hasTeamAssignee = assignees.some(a => assigneeWhitelist.includes(a));
+
+        if (!hasTeamAssignee) {
+          info(`⏭️  Skipping issue #${issue.number} - no team members assigned`);
+          continue;
+        }
+      }
+
       // check if the issue exists in Jira
 
       // build the globalId from this issue
       // the globalId is the github issue number prefixed by the repository name all in upper-case
       const globalId = `${this.#projectConfiguration.jira.globalIdPrefix}-${issue.number}`;
 
-      // create the issue in Jira
-      info(`🔥 Create or update issue ${issue.url} in Jira...`);
+      // Get the issue URL (different field names for REST vs GraphQL)
+      const issueUrl = 'html_url' in issue ? issue.html_url : issue.url;
 
-      // get the labels of the issue
-      const labels = issue.labels.nodes.map((n) => n.name);
+      // create the issue in Jira
+      info(`🔥 Create or update issue ${issueUrl} in Jira...`);
+
+      // get the labels of the issue (handle both REST and GraphQL formats)
+      const labels = 'labels' in issue && Array.isArray(issue.labels)
+        ? issue.labels.map((l) => (typeof l === 'string' ? l : l.name))
+        : 'labels' in issue && 'nodes' in issue.labels
+        ? issue.labels.nodes.map((n) => n.name)
+        : [];
 
       // the remote link title is based from the name of the repository, taking first letters separated by a dash
       // then making it upper case and adding the issue number
@@ -259,54 +291,105 @@ export class SyncRepository {
         fixVersionId = this.#fixVersions.get(prefixedMilestone);
       }
 
-      // ignore null projects that can be returned by the GrapQH query
-      const projectData = issue.projectItems.projects
-        .filter((p) => p !== null)
-        .find((p) => p.project.title?.name === this.#projectConfiguration.github.project);
+      let status: string;
+      let resolution: string | undefined;
+      let storyPoints: number | undefined;
+      let priority: string | undefined;
+      let sprintBoardId: number | undefined;
 
-      // Debug: log what we found
-      if (isDebug()) {
-        info(`  🔍 Looking for project: "${this.#projectConfiguration.github.project}"`);
-        info(`  🔍 Found projects: ${JSON.stringify(issue.projectItems.projects.map(p => p?.project?.title?.name))}`);
-        info(`  🔍 ProjectData match: ${projectData ? 'YES' : 'NO'}`);
-        if (projectData) {
-          info(`  🔍 Full projectData: ${JSON.stringify(projectData.project, null, 2)}`);
+      if (syncMode === 'full') {
+        // Full mode: Extract Projects v2 fields (GraphQL)
+        // ignore null projects that can be returned by the GrapQH query
+        const projectData = 'projectItems' in issue
+          ? issue.projectItems.projects
+              .filter((p) => p !== null)
+              .find((p) => p.project.title?.name === this.#projectConfiguration.github.projectsV2Board)
+          : undefined;
+
+        // Debug: log what we found
+        if (isDebug()) {
+          info(`  🔍 Looking for GitHub Projects v2 board: "${this.#projectConfiguration.github.projectsV2Board}"`);
+          if ('projectItems' in issue) {
+            info(`  🔍 Found projects: ${JSON.stringify(issue.projectItems.projects.map(p => p?.project?.title?.name))}`);
+            info(`  🔍 ProjectData match: ${projectData ? 'YES' : 'NO'}`);
+            if (projectData) {
+              info(`  🔍 Full projectData: ${JSON.stringify(projectData.project, null, 2)}`);
+            }
+          }
         }
+
+        const projectStatus = projectData?.project.status?.name;
+        status = this.getJiraStatusFromGithubProject(projectStatus);
+        storyPoints = projectData?.project.storyPoints?.value;
+        const githubPriority = projectData?.project.priority?.name;
+        priority = this.getJiraPriorityFromGithubProject(githubPriority);
+
+        const sprintName = projectData?.project.sprint?.title;
+        if (sprintName) {
+          sprintBoardId = this.#sprints.get(sprintName);
+        }
+      } else {
+        // Basic mode: Derive from issue state and state_reason (REST API)
+        const issueState = 'state' in issue ? issue.state : 'open';
+        const stateReason = 'state_reason' in issue ? issue.state_reason : null;
+
+        if (issueState === 'open') {
+          status = 'To Do';
+          resolution = undefined; // Open issues are unresolved
+        } else if (issueState === 'closed') {
+          // Map state_reason to resolution
+          switch (stateReason) {
+            case 'completed':
+              status = 'Closed';
+              resolution = 'Done';
+              break;
+            case 'not_planned':
+              status = 'Closed';
+              resolution = "Won't Do";
+              break;
+            case 'duplicate':
+              status = 'Closed';
+              resolution = 'Duplicate';
+              break;
+            default:
+              // Fallback for null or unknown reasons
+              status = 'Closed';
+              resolution = 'Done';
+          }
+        } else {
+          status = 'To Do'; // Fallback
+        }
+
+        // storyPoints, priority, sprintBoardId remain undefined in basic mode
       }
 
-      const projectStatus = projectData?.project.status?.name;
-      const status = this.getJiraStatusFromGithubProject(projectStatus);
-      const storyPoints = projectData?.project.storyPoints?.value;
-      const githubPriority = projectData?.project.priority?.name;
-      const priority = this.getJiraPriorityFromGithubProject(githubPriority);
       const jiraProjectKey = this.#projectConfiguration.jira.projectKey;
 
-      // Debug: log story points, status, and priority
-      if (isDebug()) {
-        info(`  📊 GitHub status: ${projectStatus || 'undefined'} → Jira status: ${status}`);
+      // Debug: log story points, status, and priority (only in full mode)
+      if (isDebug() && syncMode === 'full') {
         info(`  📊 Story Points: ${storyPoints ?? 'undefined'}`);
-        info(`  🎯 GitHub priority: ${githubPriority || 'undefined'} → Jira priority: ${priority || 'undefined'}`);
+        info(`  🎯 Priority: ${priority || 'undefined'}`);
       }
 
-      const sprintName = projectData?.project.sprint?.title;
-      let sprintBoardId: number | undefined;
-      if (sprintName) {
-        sprintBoardId = this.#sprints.get(sprintName);
-      }
-      // convert the body from Markdown to Jira
-      const body = jira2md.default.to_jira(issue.body);
+      // convert the body from Markdown to Jira (handle null body)
+      const issueBody = issue.body || '';
+      const body = jira2md.default.to_jira(issueBody);
+
+      // Get the state field (different names in REST vs GraphQL)
+      const issueState = 'state' in issue ? issue.state : 'open';
 
       // data to create the issue in Jira
       const issueToCreate: CreateIssueParams = {
         title: issue.title,
         body,
-        state: issue.state,
+        state: issueState,
         issuetype: this.getJiraIssueTypeFromGitHubLabels(labels),
         status,
+        resolution, // NEW: Add resolution field
         fixVersionId,
         sprintBoardId,
         globalId,
-        remoteLinkUrl: issue.url,
+        remoteLinkUrl: issueUrl,
         remoteLinkTitle,
         jiraProjectKey,
         priority,

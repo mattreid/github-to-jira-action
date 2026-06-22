@@ -26,8 +26,10 @@ export interface ProjectConfigurationGitHub {
   readToken: string;
   owner: string;
   repo: string;
-  project: string;
+  projectsV2Board?: string; // Optional: GitHub Projects v2 board name (only needed for full mode)
   startDate: Moment;
+  syncMode?: 'basic' | 'full'; // Optional: defaults to 'full' for backward compatibility
+  assigneeWhitelist?: string[]; // Optional: filter by assignees
 
   projectFields: ProjectConfigurationGitHubField[];
 }
@@ -53,6 +55,7 @@ export interface ProjectConfiguration {
   priorityTypeDefault?: string;
 
   maxBatchNumberIssues: number;
+  dryRun?: boolean; // NEW: Dry-run mode flag
 }
 
 export class Configuration {
@@ -62,6 +65,7 @@ export class Configuration {
   #jiraWriteToken: string;
   #syncYaml: SyncYaml;
   #syncStateYaml: SyncStateYaml | undefined;
+  #dryRun: boolean;
 
   #statusTypeMappings: Map<string, SyncYamStatusTypeMappingDefinition[]>;
   #priorityTypeMappings: Map<string, SyncYamPriorityTypeMappingDefinition[]>;
@@ -75,6 +79,7 @@ export class Configuration {
     jiraWriteToken: string;
     syncYaml: SyncYaml;
     syncStateYaml?: SyncStateYaml;
+    dryRun?: boolean;
   }) {
     this.#githubReakToken = params.githubReadToken;
     this.#jiraHost = params.jiraHost;
@@ -82,6 +87,7 @@ export class Configuration {
     this.#jiraWriteToken = params.jiraWriteToken;
     this.#syncYaml = params.syncYaml;
     this.#syncStateYaml = params.syncStateYaml;
+    this.#dryRun = params.dryRun || false;
     this.#statusTypeMappings = new Map();
     this.#priorityTypeMappings = new Map();
     this.#issueTypeMappings = new Map();
@@ -143,13 +149,17 @@ export class Configuration {
   getProjectConfigurations(): ProjectConfiguration[] {
     // need one project configuration for each project in githubProjects field of the syncYaml
     const projectConfigurations = this.#syncYaml.syncProjects.map((project) => {
-      // grab agile project definition
-      const agileProject = this.#githubProjects.get(project.github.project);
+      // Support both old 'project' and new 'projectsV2Board' field names (backwards compatibility)
+      const projectsV2BoardName = project.github.projectsV2Board || project.github.project;
+
+      // grab agile project definition (only needed for full mode)
+      const agileProject = projectsV2BoardName ? this.#githubProjects.get(projectsV2BoardName) : undefined;
       const projectFields: ProjectConfigurationGitHubField[] = [];
 
-      console.log(`🔍 CONFIG: Looking up GitHub project: "${project.github.project}"`);
-      console.log(`🔍 CONFIG: Available projects:`, Array.from(this.#githubProjects.keys()));
-      console.log(`🔍 CONFIG: Found agile project definition:`, agileProject ? 'YES' : 'NO');
+      console.log(`🔍 CONFIG: Sync mode: ${project.github.syncMode || 'full'}`);
+      console.log(`🔍 CONFIG: GitHub Projects v2 board: "${projectsV2BoardName || 'N/A (basic mode)'}"`);
+      console.log(`🔍 CONFIG: Available board definitions:`, Array.from(this.#githubProjects.keys()));
+      console.log(`🔍 CONFIG: Found board definition:`, agileProject ? 'YES' : 'NO');
 
       if (agileProject) {
         if (agileProject.storyPoints) {
@@ -187,9 +197,11 @@ export class Configuration {
       const github: ProjectConfigurationGitHub = {
         owner: project.github.owner,
         repo: project.github.repo,
-        project: project.github.project,
+        projectsV2Board: projectsV2BoardName,
         readToken: this.#githubReakToken,
         startDate: moment(project.github.afterDate),
+        syncMode: project.github.syncMode || 'full', // Default to 'full' for backward compatibility
+        assigneeWhitelist: project.github.assigneeWhitelist,
         projectFields,
       };
 
@@ -251,6 +263,7 @@ export class Configuration {
         statusTypeDefault,
         priorityTypeMapping,
         priorityTypeDefault,
+        dryRun: this.#dryRun,
       };
 
       return projectConfiguration;

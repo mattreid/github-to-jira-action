@@ -22,6 +22,7 @@ export interface CreateIssueParams {
   state: string;
   issuetype: string;
   status: string;
+  resolution?: string; // Optional: Jira resolution field (e.g., "Done", "Won't Do")
   storyPoints?: number;
   fixVersionId?: string;
   sprintBoardId?: number;
@@ -114,6 +115,10 @@ export class Jira {
     const jiraConnected = await this.checkJiraConnection();
     if (!jiraConnected) {
       throw new Error('Jira connection error');
+    }
+
+    if (this.#projectConfiguration.dryRun) {
+      console.log('🔍 [DRY RUN] Jira connection successful - will simulate issue creation');
     }
 
     // get JIRA project
@@ -502,6 +507,22 @@ export class Jira {
   }
 
   async createOrUpdateIssue(createOrUpdateIssueParams: CreateIssueParams): Promise<{ key: string }> {
+    // DRY RUN MODE: Just log what would happen
+    if (this.#projectConfiguration.dryRun) {
+      console.log('\n🔍 [DRY RUN] Would create/update Jira issue:');
+      console.log(`   Title: ${createOrUpdateIssueParams.title}`);
+      console.log(`   Type: ${createOrUpdateIssueParams.issuetype}`);
+      console.log(`   Status: ${createOrUpdateIssueParams.status}`);
+      console.log(`   Resolution: ${createOrUpdateIssueParams.resolution || 'None'}`);
+      console.log(`   Priority: ${createOrUpdateIssueParams.priority || 'None'}`);
+      console.log(`   Story Points: ${createOrUpdateIssueParams.storyPoints || 'None'}`);
+      console.log(`   Fix Version: ${createOrUpdateIssueParams.fixVersionId || 'None'}`);
+      console.log(`   Sprint: ${createOrUpdateIssueParams.sprintBoardId || 'None'}`);
+      console.log(`   GitHub URL: ${createOrUpdateIssueParams.remoteLinkUrl}`);
+      console.log(`   Global ID: ${createOrUpdateIssueParams.globalId}`);
+      return { key: 'DRY-RUN-123' };
+    }
+
     if (!this.#storyPointsFieldId) {
       throw new Error('Story Points field not initialized, cannot create or update issue');
     }
@@ -552,10 +573,12 @@ export class Jira {
 
     // create issue in Jira or update if already exists
     let issueKey: string;
+    let isNewIssue = false;
     if (!existingKey) {
       try {
         const result = await this.#client.issues.createIssue(createParams);
         issueKey = result.key;
+        isNewIssue = true;
         console.log(`✅ Created Jira issue ${issueKey}`);
       } catch (createError: unknown) {
         const error = createError as { response?: { status?: number; data?: unknown } };
@@ -568,43 +591,45 @@ export class Jira {
       console.log(`Found existing Jira issue ${issueKey}`);
     }
 
-    // update the remote link using v3 API
-    try {
-      await this.#clientV3.issueRemoteLinks.createOrUpdateRemoteIssueLink({
-        issueIdOrKey: issueKey,
-        globalId: createOrUpdateIssueParams.globalId,
-        object: {
-          url: createOrUpdateIssueParams.remoteLinkUrl,
-          title: createOrUpdateIssueParams.remoteLinkTitle,
-          icon: {
-            url16x16: 'https://github.githubassets.com/favicons/favicon.svg',
-            title: 'GitHub',
+    // Only create remote link for new issues (existing issues should already have it)
+    if (isNewIssue) {
+      try {
+        await this.#clientV3.issueRemoteLinks.createOrUpdateRemoteIssueLink({
+          issueIdOrKey: issueKey,
+          globalId: createOrUpdateIssueParams.globalId,
+          object: {
+            url: createOrUpdateIssueParams.remoteLinkUrl,
+            title: createOrUpdateIssueParams.remoteLinkTitle,
+            icon: {
+              url16x16: 'https://github.githubassets.com/favicons/favicon.svg',
+              title: 'GitHub',
+            },
           },
-        },
-      });
-      console.log(`✅ Remote link created for issue ${issueKey}`);
-    } catch (remoteLinkError: unknown) {
-      const error = remoteLinkError as { response?: { status?: number; data?: unknown } };
-      if (error.response?.status === 410) {
-        // Known Jira bug (JRACLOUD-28064): API returns 410 but link is actually created
-        // Treat this as success and continue
-        console.warn(
-          `⚠️  Remote link API returned 410 (known Jira bug), but link was likely created successfully for ${issueKey}`,
-        );
-        // Don't throw - the link was probably created despite the 410 error
-      } else {
-        console.error(`❌ Remote link error (status ${error.response?.status}):`, error.response?.data);
-        // Re-throw other errors
-        throw remoteLinkError;
+        });
+        console.log(`✅ Remote link created for issue ${issueKey}`);
+      } catch (remoteLinkError: unknown) {
+        const error = remoteLinkError as { response?: { status?: number; data?: unknown } };
+        if (error.response?.status === 410) {
+          // Known Jira bug (JRACLOUD-28064): API returns 410 but link is actually created
+          // Treat this as success and continue
+          console.warn(
+            `⚠️  Remote link API returned 410 (known Jira bug), but link was likely created successfully for ${issueKey}`,
+          );
+          // Don't throw - the link was probably created despite the 410 error
+        } else {
+          console.error(`❌ Remote link error (status ${error.response?.status}):`, error.response?.data);
+          // Re-throw other errors
+          throw remoteLinkError;
+        }
       }
     }
 
     // optional fields that can be defined for updating an issue
     const updateOptionalFields: Record<string, unknown> = {};
 
-    // story points ?
-    if (this.#storyPointsFieldId) {
-      updateOptionalFields[this.#storyPointsFieldId] = createOrUpdateIssueParams.storyPoints ?? 1;
+    // story points - only set if explicitly provided (from Projects v2 in full mode)
+    if (this.#storyPointsFieldId && createOrUpdateIssueParams.storyPoints !== undefined) {
+      updateOptionalFields[this.#storyPointsFieldId] = createOrUpdateIssueParams.storyPoints;
     }
 
     let fixVersions: { id: string }[] | undefined = [];
@@ -631,6 +656,12 @@ export class Jira {
       components,
       description: descriptionWithGitHubLink,
       fixVersions,
+      // Add resolution if provided
+      ...(createOrUpdateIssueParams.resolution && {
+        resolution: {
+          name: createOrUpdateIssueParams.resolution,
+        },
+      }),
     };
 
     try {

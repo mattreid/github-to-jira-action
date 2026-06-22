@@ -62,8 +62,11 @@ export interface SyncYamlSyncProject {
   github: {
     owner: string;
     repo: string;
-    project: string;
+    project?: string; // DEPRECATED: Use projectsV2Board instead
+    projectsV2Board?: string; // Optional: GitHub Projects v2 board name (only needed for full mode)
     afterDate: string;
+    syncMode?: 'basic' | 'full'; // Optional: basic (REST API) or full (GraphQL), defaults to 'full'
+    assigneeWhitelist?: string[]; // Optional: filter by assignees
   };
   useMapping: {
     issueType: string;

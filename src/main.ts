@@ -12,15 +12,25 @@ export class Main {
   public static readonly JIRA_EMAIL: string = 'jira-email';
   public static readonly JIRA_WRITE_TOKEN: string = 'jira-write-token';
   public static readonly GITHUB_READ_TOKEN: string = 'github-read-token';
+  public static readonly DRY_RUN: string = 'dry-run';
 
   #sync: Sync | undefined;
 
   protected async doStart(): Promise<void> {
     // Jira host
-    const jiraHost = core.getInput(Main.JIRA_HOST);
+    let jiraHost = core.getInput(Main.JIRA_HOST);
     if (!jiraHost) {
       throw new Error('No Jira Host provided');
     }
+
+    // Normalize Jira host URL
+    // Remove trailing slashes
+    jiraHost = jiraHost.replace(/\/+$/, '');
+    // Add https:// if no protocol specified
+    if (!jiraHost.startsWith('http://') && !jiraHost.startsWith('https://')) {
+      jiraHost = `https://${jiraHost}`;
+    }
+    core.info(`Using Jira host: ${jiraHost}`);
 
     // Jira email
     const jiraEmail = core.getInput(Main.JIRA_EMAIL);
@@ -34,10 +44,13 @@ export class Main {
       throw new Error('No Jira Write Token provided');
     }
 
-    // github write token
-    const githubReadToken = core.getInput(Main.GITHUB_READ_TOKEN);
-    if (!githubReadToken) {
-      throw new Error('No GitHub Read Token provided');
+    // github read token (optional for basic mode)
+    const githubReadToken = core.getInput(Main.GITHUB_READ_TOKEN) || '';
+
+    // dry-run mode (optional)
+    const dryRun = core.getInput(Main.DRY_RUN) === 'true' || process.env.DRY_RUN === 'true';
+    if (dryRun) {
+      core.info('🔍 DRY RUN MODE - No changes will be made to Jira');
     }
 
     // read the yaml file sync.yaml
@@ -63,6 +76,7 @@ export class Main {
       jiraWriteToken,
       syncYaml,
       syncStateYaml,
+      dryRun,
     };
 
     const configuration = new Configuration(params);

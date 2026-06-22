@@ -68,28 +68,65 @@ export interface GraphQLSearchIssuesResponse {
   };
 }
 
+// Basic issue type from REST API
+export interface BasicIssue {
+  number: number;
+  title: string;
+  body: string | null;
+  state: 'open' | 'closed';
+  state_reason: 'completed' | 'not_planned' | 'reopened' | 'duplicate' | null;
+  html_url: string;
+  updated_at: string;
+  created_at: string;
+  closed_at: string | null;
+  labels: Array<{ name: string }>;
+  milestone: {
+    title: string;
+    number: number;
+  } | null;
+  assignees: Array<{ login: string }>;
+  pull_request?: unknown; // Present if this is a PR
+  user: { login: string };
+}
+
 export class GitHub {
   #projectConfiguration: ProjectConfiguration;
-  #githubReadAccess: InstanceType<typeof OctokitGitHub>;
+  #githubReadAccess: InstanceType<typeof OctokitGitHub> | undefined;
 
   constructor(projectConfiguration: ProjectConfiguration) {
     this.#projectConfiguration = projectConfiguration;
-    this.#githubReadAccess = getOctokit(this.#projectConfiguration.github.readToken);
+    // Only initialize Octokit if we have a token (needed for GraphQL full mode)
+    if (this.#projectConfiguration.github.readToken) {
+      this.#githubReadAccess = getOctokit(this.#projectConfiguration.github.readToken);
+    }
   }
 
   async getIssuesUpdatedAfter(): Promise<{
     owner: string;
     repo: string;
     afterDate: string;
-    issues: GraphQLSearchIssuesNode[];
+    issues: GraphQLSearchIssuesNode[] | BasicIssue[];
   }> {
-    const issues = await this.doGetIssuesUpdatedAfterBatch();
+    const syncMode = this.#projectConfiguration.github.syncMode || 'full';
+
+    let issues: GraphQLSearchIssuesNode[] | BasicIssue[];
+    if (syncMode === 'basic') {
+      issues = await this.getIssuesViaREST();
+    } else {
+      issues = await this.doGetIssuesUpdatedAfterBatch();
+    }
 
     // startDate will be the last updated date of the last issue
     let nextStartDate: string = this.#projectConfiguration.github.startDate.toISOString();
     const lastItem = issues[issues.length - 1];
     if (lastItem) {
-      nextStartDate = lastItem.updatedAt;
+      const lastUpdateTime = 'updated_at' in lastItem ? lastItem.updated_at : lastItem.updatedAt;
+
+      // Add 1 second to avoid re-fetching the same issue
+      // (GitHub's 'since' parameter is inclusive: updated_at >= since)
+      const lastUpdateDate = new Date(lastUpdateTime);
+      lastUpdateDate.setSeconds(lastUpdateDate.getSeconds() + 1);
+      nextStartDate = lastUpdateDate.toISOString();
     }
 
     return {
@@ -100,7 +137,154 @@ export class GitHub {
     };
   }
 
+  async getIssuesViaREST(): Promise<BasicIssue[]> {
+    const startDate = this.#projectConfiguration.github.startDate.toISOString();
+    const owner = this.#projectConfiguration.github.owner;
+    const repo = this.#projectConfiguration.github.repo;
+    const assigneeWhitelist = this.#projectConfiguration.github.assigneeWhitelist;
+    const maxBatchNumberIssues = this.#projectConfiguration.maxBatchNumberIssues;
+
+    let allIssues: BasicIssue[] = [];
+
+    // If we have assignee whitelist, fetch per assignee for efficiency
+    if (assigneeWhitelist && assigneeWhitelist.length > 0) {
+      for (const assignee of assigneeWhitelist) {
+        info(`Fetching issues assigned to ${assignee}...`);
+        const issues = await this.fetchIssuesForAssignee(owner, repo, assignee, startDate);
+        allIssues.push(...issues);
+      }
+    } else {
+      // Fetch all issues (no filter)
+      info(`Fetching all issues...`);
+      allIssues = await this.fetchAllIssues(owner, repo, startDate);
+    }
+
+    // Deduplicate (issue might match multiple criteria)
+    const uniqueIssues = Array.from(
+      new Map(allIssues.map(i => [i.number, i])).values()
+    );
+
+    // Sort by updated_at ascending (match GraphQL behavior)
+    uniqueIssues.sort((a, b) =>
+      new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
+    );
+
+    // Respect maxBatchNumberIssues limit
+    const limitedIssues = uniqueIssues.slice(0, maxBatchNumberIssues);
+
+    info(`Fetched ${limitedIssues.length} issues via REST API`);
+    return limitedIssues;
+  }
+
+  private async fetchIssuesForAssignee(
+    owner: string,
+    repo: string,
+    assignee: string,
+    since: string
+  ): Promise<BasicIssue[]> {
+    let page = 1;
+    let allIssues: BasicIssue[] = [];
+
+    while (true) {
+      const params = new URLSearchParams({
+        state: 'all',
+        assignee: assignee,
+        per_page: '100',
+        page: page.toString(),
+        sort: 'updated',
+        direction: 'asc',
+        since: since,
+      });
+
+      const url = `https://api.github.com/repos/${owner}/${repo}/issues?${params}`;
+      const response = await fetch(url, {
+        headers: this.getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+      }
+
+      const items: BasicIssue[] = await response.json();
+
+      // Filter out pull requests (they have a pull_request field)
+      const issues = items.filter(item => !item.pull_request);
+      allIssues.push(...issues);
+
+      // Stop if no more results or less than per_page (last page)
+      if (items.length < 100) {
+        break;
+      }
+
+      page++;
+    }
+
+    return allIssues;
+  }
+
+  private async fetchAllIssues(
+    owner: string,
+    repo: string,
+    since: string
+  ): Promise<BasicIssue[]> {
+    let page = 1;
+    let allIssues: BasicIssue[] = [];
+
+    while (true) {
+      const params = new URLSearchParams({
+        state: 'all',
+        per_page: '100',
+        page: page.toString(),
+        sort: 'updated',
+        direction: 'asc',
+        since: since,
+      });
+
+      const url = `https://api.github.com/repos/${owner}/${repo}/issues?${params}`;
+      const response = await fetch(url, {
+        headers: this.getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+      }
+
+      const items: BasicIssue[] = await response.json();
+
+      // Filter out pull requests
+      const issues = items.filter(item => !item.pull_request);
+      allIssues.push(...issues);
+
+      // Stop if no more results
+      if (items.length < 100) {
+        break;
+      }
+
+      page++;
+    }
+
+    return allIssues;
+  }
+
+  private getAuthHeaders(): HeadersInit {
+    const token = this.#projectConfiguration.github.readToken;
+    if (token) {
+      return {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      };
+    }
+    return {
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    };
+  }
+
   foo() {
+    if (!this.#githubReadAccess) {
+      throw new Error('GitHub Octokit client not initialized - token required for this operation');
+    }
     this.#githubReadAccess.rest.issues.listForRepo({
       owner: this.#projectConfiguration.github.owner,
       repo: this.#projectConfiguration.github.repo,
