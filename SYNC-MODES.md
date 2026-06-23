@@ -64,7 +64,7 @@ syncProjects:
       syncMode: basic  # ← Basic mode
 
       # Only sync issues assigned to your team
-      assigneeWhitelist:
+      assigneeAllowlist:
         - alice
         - bob
 
@@ -150,14 +150,14 @@ syncProjects:
       syncMode: basic
       owner: kubernetes
       repo: kubernetes
-      assigneeWhitelist: [alice]
+      assigneeAllowlist: [alice]
 
   - name: "Prometheus"
     github:
       syncMode: basic
       owner: prometheus
       repo: prometheus
-      assigneeWhitelist: [bob]
+      assigneeAllowlist: [bob]
 
   # Your repos - full mode
   - name: "Internal Backend"
@@ -184,13 +184,13 @@ syncProjects:
 
 ## Filtering (Both Modes)
 
-### Assignee Whitelist
+### Assignee Allowlist
 
 Filter issues to only sync those assigned to your team members:
 
 ```yaml
 github:
-  assigneeWhitelist:
+  assigneeAllowlist:
     - alice
     - bob
     - charlie

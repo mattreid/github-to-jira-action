@@ -142,14 +142,14 @@ export class GitHub {
     const startDate = this.#projectConfiguration.github.startDate.toISOString();
     const owner = this.#projectConfiguration.github.owner;
     const repo = this.#projectConfiguration.github.repo;
-    const assigneeWhitelist = this.#projectConfiguration.github.assigneeWhitelist;
+    const assigneeAllowlist = this.#projectConfiguration.github.assigneeAllowlist;
     const maxBatchNumberIssues = this.#projectConfiguration.maxBatchNumberIssues;
 
     let allIssues: BasicIssue[] = [];
 
     // If we have assignee whitelist, fetch per assignee for efficiency
-    if (assigneeWhitelist && assigneeWhitelist.length > 0) {
-      for (const assignee of assigneeWhitelist) {
+    if (assigneeAllowlist && assigneeAllowlist.length > 0) {
+      for (const assignee of assigneeAllowlist) {
         info(`Fetching issues assigned to ${assignee}...`);
         const issues = await this.fetchIssuesForAssignee(owner, repo, assignee, startDate);
         allIssues.push(...issues);

@@ -29,7 +29,7 @@ export interface ProjectConfigurationGitHub {
   projectsV2Board?: string; // Optional: GitHub Projects v2 board name (only needed for full mode)
   startDate: Moment;
   syncMode?: 'basic' | 'full'; // Optional: defaults to 'full' for backward compatibility
-  assigneeWhitelist?: string[]; // Optional: filter by assignees
+  assigneeAllowlist?: string[]; // Optional: filter by assignees
 
   projectFields: ProjectConfigurationGitHubField[];
 }
@@ -201,7 +201,7 @@ export class Configuration {
         readToken: this.#githubReakToken,
         startDate: moment(project.github.afterDate),
         syncMode: project.github.syncMode || 'full', // Default to 'full' for backward compatibility
-        assigneeWhitelist: project.github.assigneeWhitelist,
+        assigneeAllowlist: project.github.assigneeAllowlist,
         projectFields,
       };
 

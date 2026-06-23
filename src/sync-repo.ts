@@ -239,17 +239,17 @@ export class SyncRepository {
 
     startGroup('🚀 Create or update issues in Jira...');
 
-    const assigneeWhitelist = this.#projectConfiguration.github.assigneeWhitelist;
+    const assigneeAllowlist = this.#projectConfiguration.github.assigneeAllowlist;
 
     // for each issue
     for (const issue of recentIssuesSearch.issues) {
       // Assignee filtering (works for both basic and full mode)
-      if (assigneeWhitelist && assigneeWhitelist.length > 0) {
+      if (assigneeAllowlist && assigneeAllowlist.length > 0) {
         const assignees = 'assignees' in issue
           ? issue.assignees.map(a => a.login)
           : []; // GraphQL doesn't have assignees field in our current query
 
-        const hasTeamAssignee = assignees.some(a => assigneeWhitelist.includes(a));
+        const hasTeamAssignee = assignees.some(a => assigneeAllowlist.includes(a));
 
         if (!hasTeamAssignee) {
           info(`⏭️  Skipping issue #${issue.number} - no team members assigned`);

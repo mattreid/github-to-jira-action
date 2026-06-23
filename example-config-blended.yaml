@@ -87,7 +87,7 @@ syncProjects:
       syncMode: basic
 
       # Filter to only team-assigned issues
-      assigneeWhitelist:
+      assigneeAllowlist:
         - alice
         - bob
         - charlie
@@ -117,7 +117,7 @@ syncProjects:
       syncMode: basic
 
       # Could also filter by labels in sync logic (future enhancement)
-      assigneeWhitelist:
+      assigneeAllowlist:
         - yourteam-member
 
     useMapping:
@@ -151,7 +151,7 @@ syncProjects:
       projectsV2Board: Internal Sprint Board
 
       # Optional: Still can filter by assignee even in full mode
-      # assigneeWhitelist:
+      # assigneeAllowlist:
       #   - team-member-1
 
     useMapping:
@@ -180,7 +180,7 @@ syncProjects:
       syncMode: full
       projectsV2Board: Partner Sprint Board
 
-      assigneeWhitelist:
+      assigneeAllowlist:
         - your-team-member
 
     useMapping:
@@ -241,7 +241,7 @@ syncProjects:
 #   - Requires projectsV2Board to match a githubProjects definition
 #
 # FILTERING (works in both modes):
-#   - assigneeWhitelist: Only sync issues assigned to listed users
+#   - assigneeAllowlist: Only sync issues assigned to listed users
 #   - Server-side filtering for efficiency (reduces API calls ~50x)
 #
 # INCREMENTAL SYNC (automatic):

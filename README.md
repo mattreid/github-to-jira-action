@@ -116,7 +116,7 @@ syncProjects:
       syncMode: basic               # Basic mode - no Projects v2
       afterDate: "2026-01-01T00:00:00Z"
       # Optional: filter to team members only
-      assigneeWhitelist:
+      assigneeAllowlist:
         - alice
         - bob
     useMapping:
@@ -199,7 +199,7 @@ syncProjects:
       # to a more recent date
       afterDate: 2024-04-25
       # Optional: filter to specific assignees
-      assigneeWhitelist:
+      assigneeAllowlist:
         - alice
         - bob
     useMapping:
@@ -228,7 +228,7 @@ See [example-config-blended.yaml](./example-config-blended.yaml) for more exampl
 - **projectsV2Board** (full mode only): Name of the GitHub Projects v2 board
   - Note: The old `project` field name still works for backward compatibility
 
-- **assigneeWhitelist** (optional): Array of GitHub usernames
+- **assigneeAllowlist** (optional): Array of GitHub usernames
   - Only sync issues assigned to these users
   - Uses server-side filtering (very efficient for large repos)
   - Works in both basic and full modes
@@ -423,7 +423,7 @@ Only sync issues assigned to specific team members:
 
 ```yaml
 github:
-  assigneeWhitelist:
+  assigneeAllowlist:
     - alice
     - bob
     - charlie
