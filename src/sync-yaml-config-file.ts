@@ -72,6 +72,7 @@ export interface SyncYamlSyncProject {
     afterDate: string;
     syncMode?: 'basic' | 'full'; // Optional: basic (REST API) or full (GraphQL), defaults to 'full'
     assigneeAllowlist?: string[]; // Optional: filter by assignees
+    milestonePrefixWithProject?: boolean; // Optional: prefix milestone names with project name (default: true)
   };
   useMapping: {
     issueType: string;

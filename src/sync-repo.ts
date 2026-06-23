@@ -61,11 +61,14 @@ export class SyncRepository {
       return githubReleases.findIndex((m2) => m2?.title === m?.title) === index;
     });
 
-    // add the name of the project to the milestone as prefix
+    // Optionally add the name of the project to the milestone as prefix
+    // Default: true for backward compatibility
+    // Set to false to share milestones across repos (e.g., cross-repo releases)
+    const prefixWithProject = this.#projectConfiguration.github.milestonePrefixWithProject ?? true;
     const githubReleasesWithProjectPrefix = githubReleasesWithoutDuplicates.map((release) => {
       return {
         ...release,
-        title: `${this.#projectConfiguration.name} ${release.title}`,
+        title: prefixWithProject ? `${this.#projectConfiguration.name} ${release.title}` : release.title,
       };
     });
 
@@ -222,17 +225,25 @@ export class SyncRepository {
 
     const syncMode = this.#projectConfiguration.github.syncMode || 'full';
 
-    // Only sync releases and sprints in full mode (they come from Projects v2)
-    if (syncMode === 'basic') {
-      info('ℹ️  Basic mode: Skipping releases and sprints sync (not available without Projects v2)');
-    } else if (this.#projectConfiguration.dryRun) {
-      info('🔍 [DRY RUN] Skipping releases and sprints sync');
+    // Sync releases (milestones → fix versions) for both modes
+    // Milestones are available in both REST API (basic) and GraphQL (full)
+    if (this.#projectConfiguration.dryRun) {
+      info('🔍 [DRY RUN] Skipping releases sync');
     } else {
-      info('Sync releases...');
+      info('Sync releases (milestones → fix versions)...');
       await this.syncReleases(recentIssuesSearch.issues);
+    }
 
-      info('Sync sprint...');
-      await this.syncSprints(recentIssuesSearch.issues);
+    // Sprints only available in full mode (Projects v2 iterations)
+    if (syncMode === 'full') {
+      if (this.#projectConfiguration.dryRun) {
+        info('🔍 [DRY RUN] Skipping sprints sync');
+      } else {
+        info('Sync sprint...');
+        await this.syncSprints(recentIssuesSearch.issues);
+      }
+    } else {
+      info('ℹ️  Basic mode: Skipping sprints sync (Projects v2 iterations not available)');
     }
 
     endGroup();
@@ -287,8 +298,11 @@ export class SyncRepository {
       // fixVersionId from the milestone
       let fixVersionId: string | undefined;
       if (issue.milestone) {
-        const prefixedMilestone = `${this.#projectConfiguration.name} ${issue.milestone.title}`;
-        fixVersionId = this.#fixVersions.get(prefixedMilestone);
+        const prefixWithProject = this.#projectConfiguration.github.milestonePrefixWithProject ?? true;
+        const milestoneName = prefixWithProject
+          ? `${this.#projectConfiguration.name} ${issue.milestone.title}`
+          : issue.milestone.title;
+        fixVersionId = this.#fixVersions.get(milestoneName);
       }
 
       let status: string;

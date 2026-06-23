@@ -30,6 +30,7 @@ export interface ProjectConfigurationGitHub {
   startDate: Moment;
   syncMode?: 'basic' | 'full'; // Optional: defaults to 'full' for backward compatibility
   assigneeAllowlist?: string[]; // Optional: filter by assignees
+  milestonePrefixWithProject?: boolean; // Optional: prefix milestone names with project name (default: true)
 
   projectFields: ProjectConfigurationGitHubField[];
 }
@@ -253,6 +254,7 @@ export class Configuration {
         startDate: moment(project.github.afterDate),
         syncMode: project.github.syncMode || 'full', // Default to 'full' for backward compatibility
         assigneeAllowlist: this.expandAssigneeAllowlist(project.github.assigneeAllowlist, project.name),
+        milestonePrefixWithProject: project.github.milestonePrefixWithProject ?? true, // Default to true for backward compatibility
         projectFields,
       };
 
