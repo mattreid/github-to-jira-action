@@ -668,7 +668,17 @@ export class Jira {
     const components = component ? [component] : undefined;
 
     // Append GitHub issue URL to description for easy reference and deduplication
-    const descriptionWithGitHubLink = `${createOrUpdateIssueParams.body}\n\n---\nGitHub: ${createOrUpdateIssueParams.remoteLinkUrl}`;
+    // Jira has a ~32KB limit on description field, so truncate if needed
+    const gitHubUrlSuffix = `\n\n---\nGitHub: ${createOrUpdateIssueParams.remoteLinkUrl}`;
+    const truncationMessage = '\n\n[...content truncated - see GitHub for full description]';
+    const maxDescriptionLength = 32000 - gitHubUrlSuffix.length - truncationMessage.length;
+
+    let body = createOrUpdateIssueParams.body || '';
+    if (body.length > maxDescriptionLength) {
+      body = body.substring(0, maxDescriptionLength) + truncationMessage;
+    }
+
+    const descriptionWithGitHubLink = `${body}${gitHubUrlSuffix}`;
 
     // update the issue with the story points, body, etc
     const updateFields = {
