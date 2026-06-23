@@ -143,16 +143,35 @@ export class Jira {
       }
     }
 
-    // check if the wanted component exists
+    // check if the wanted component exists, create if missing
     this.#components = await this.#client.projectComponents.getProjectComponents({
       projectIdOrKey: this.#projectConfiguration.jira.projectKey,
     });
     const wantedComponent = this.#projectConfiguration.jira.component;
-    const componentExists = this.#components.find((component) => component.name === wantedComponent);
+    let componentExists = this.#components.find((component) => component.name === wantedComponent);
+
     if (!componentExists) {
-      throw new Error(
-        `Component "${wantedComponent}" not found in Jira to sync the project ${this.#projectConfiguration.name}`,
-      );
+      info(`Component "${wantedComponent}" not found in Jira project ${this.#projectConfiguration.jira.projectKey}, creating it...`);
+
+      try {
+        const newComponent = await this.#client.projectComponents.createComponent({
+          name: wantedComponent,
+          project: this.#projectConfiguration.jira.projectKey,
+        });
+
+        info(`✅ Created component "${wantedComponent}" (id: ${newComponent.id})`);
+
+        // Refresh components list to include the newly created one
+        this.#components = await this.#client.projectComponents.getProjectComponents({
+          projectIdOrKey: this.#projectConfiguration.jira.projectKey,
+        });
+
+        componentExists = this.#components.find((component) => component.name === wantedComponent);
+      } catch (error) {
+        throw new Error(
+          `Failed to create component "${wantedComponent}" in Jira project ${this.#projectConfiguration.jira.projectKey}: ${error}`
+        );
+      }
     }
 
     const fields = await this.#client.issueFields.getFields();
