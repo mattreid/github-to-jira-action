@@ -117,7 +117,6 @@ syncProjects:
       projectKey: K8S
       component: External
       globalIdPrefix: K8S
-      sprintBoard: ""  # Not used in basic mode
 
     maxBatchSize: 50
 
@@ -146,7 +145,6 @@ syncProjects:
       projectKey: PROM
       component: Upstream
       globalIdPrefix: PROM
-      sprintBoard: ""
 
     maxBatchSize: 30
 

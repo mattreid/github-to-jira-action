@@ -45,7 +45,7 @@ export interface ProjectConfiguration {
     writeToken: string;
     component: string;
     globalIdPrefix: string;
-    sprintBoard: string;
+    sprintBoard?: string; // Optional: only used in full mode for sprint sync
   };
   issueTypeDefault: string;
   issueTypeMapping: SyncYamlIssuesTypeMappingDefinition[];

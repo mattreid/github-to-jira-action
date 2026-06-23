@@ -82,7 +82,7 @@ export interface SyncYamlSyncProject {
     projectKey: string;
     component: string;
     globalIdPrefix: string;
-    sprintBoard: string;
+    sprintBoard?: string; // Optional: only used in full mode for sprint sync
   };
   maxBatchSize: number;
 }
