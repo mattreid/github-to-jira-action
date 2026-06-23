@@ -62,9 +62,9 @@ export class SyncRepository {
     });
 
     // Optionally add the name of the project to the milestone as prefix
-    // Default: true for backward compatibility
-    // Set to false to share milestones across repos (e.g., cross-repo releases)
-    const prefixWithProject = this.#projectConfiguration.github.milestonePrefixWithProject ?? true;
+    // Default: false (no prefix, allows milestone sharing across repos)
+    // Set to true if you want repo-specific milestone names
+    const prefixWithProject = this.#projectConfiguration.github.milestonePrefixWithProject ?? false;
     const githubReleasesWithProjectPrefix = githubReleasesWithoutDuplicates.map((release) => {
       return {
         ...release,
@@ -298,7 +298,7 @@ export class SyncRepository {
       // fixVersionId from the milestone
       let fixVersionId: string | undefined;
       if (issue.milestone) {
-        const prefixWithProject = this.#projectConfiguration.github.milestonePrefixWithProject ?? true;
+        const prefixWithProject = this.#projectConfiguration.github.milestonePrefixWithProject ?? false;
         const milestoneName = prefixWithProject
           ? `${this.#projectConfiguration.name} ${issue.milestone.title}`
           : issue.milestone.title;

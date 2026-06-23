@@ -254,7 +254,7 @@ export class Configuration {
         startDate: moment(project.github.afterDate),
         syncMode: project.github.syncMode || 'full', // Default to 'full' for backward compatibility
         assigneeAllowlist: this.expandAssigneeAllowlist(project.github.assigneeAllowlist, project.name),
-        milestonePrefixWithProject: project.github.milestonePrefixWithProject ?? true, // Default to true for backward compatibility
+        milestonePrefixWithProject: project.github.milestonePrefixWithProject ?? false, // Default to false (no prefix)
         projectFields,
       };
 
