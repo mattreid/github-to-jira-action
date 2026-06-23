@@ -111,7 +111,7 @@ syncProjects:
 
     useMapping:
       issueType: Standard Issue Mapping
-      statusType: Standard Status Mapping
+      # Note: statusType NOT needed for basic mode - status derived from issue state
 
     jira:
       projectKey: K8S
@@ -122,7 +122,7 @@ syncProjects:
     maxBatchSize: 50
 
   # --------------------------------------------------------------------------
-  # Example 2: BASIC MODE - External Public Repo with Label Filtering
+  # Example 2: BASIC MODE - External Public Repo with Mixed Filtering
   # --------------------------------------------------------------------------
   # Use case: Track specific issues from community repos
 
@@ -140,7 +140,7 @@ syncProjects:
 
     useMapping:
       issueType: Standard Issue Mapping
-      statusType: Standard Status Mapping
+      # Note: statusType NOT needed - basic mode uses open/closed from GitHub
 
     jira:
       projectKey: PROM

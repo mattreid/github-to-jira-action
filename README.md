@@ -247,10 +247,45 @@ See [example-config-blended.yaml](./example-config-blended.yaml) for more exampl
 
 ### Mappings
 
-- **statusTypeMappings**: Defines how GitHub issue statuses are mapped to Jira statuses
+**Required Mappings by Mode:**
+
+| Mapping | Basic Mode | Full Mode | Purpose |
+|---------|-----------|-----------|---------|
+| **issueType** | ✅ Required | ✅ Required | Maps GitHub labels → Jira issue types (Bug, Story, Task, Epic) |
+| **statusType** | ❌ Not used | ✅ Required | Maps Projects v2 board status → Jira status |
+| **priorityType** | ❌ Not used | ⚠️ Optional | Maps Projects v2 priority → Jira priority |
+
+**Basic Mode Status Handling:**
+- Status is **automatically derived** from GitHub issue `state`:
+  - `open` → Jira Status: "To Do"
+  - `closed` → Jira Status: "Closed"
+- Resolution is **automatically derived** from `state_reason`:
+  - `completed` → Jira Resolution: "Done"
+  - `not_planned` → Jira Resolution: "Won't Do"
+  - `duplicate` → Jira Resolution: "Duplicate"
+- **No status mapping configuration needed!**
+
+#### issuesTypeMappings
+
+Maps GitHub labels to Jira issue types (required for both modes):
+
+```yaml
+issuesTypeMappings:
+  - name: My Issue Mapping
+    default: Task
+    mapping:
+      - fromGithubLabel: bug
+        toJira: Bug
+      - fromGithubLabel: story
+        toJira: Story
+```
+
+#### statusTypeMappings (Full Mode Only)
+
+- **statusTypeMappings**: Defines how GitHub Projects v2 board statuses are mapped to Jira statuses
   - **default**: Default Jira status if no mapping is found
   - **mapping**: Individual mappings for GitHub to Jira status
-  - In basic mode, GitHub `state` (open/closed) is mapped automatically
+  - **Only used in full mode** - basic mode derives status from issue state
 
 - **priorityTypeMappings** (optional, full mode only): Maps GitHub project priority values to Jira priorities
   - **default**: Default Jira priority when no mapping matches

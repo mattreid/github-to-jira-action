@@ -75,8 +75,8 @@ export interface SyncYamlSyncProject {
   };
   useMapping: {
     issueType: string;
-    statusType: string;
-    priorityType?: string;
+    statusType?: string; // Optional: only needed for full mode (basic mode derives status from issue state)
+    priorityType?: string; // Optional: only needed for full mode
   };
   jira: {
     projectKey: string;

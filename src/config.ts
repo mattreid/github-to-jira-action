@@ -49,10 +49,10 @@ export interface ProjectConfiguration {
   };
   issueTypeDefault: string;
   issueTypeMapping: SyncYamlIssuesTypeMappingDefinition[];
-  statusTypeMapping: SyncYamStatusTypeMappingDefinition[];
-  statusTypeDefault: string;
-  priorityTypeMapping?: SyncYamPriorityTypeMappingDefinition[];
-  priorityTypeDefault?: string;
+  statusTypeMapping?: SyncYamStatusTypeMappingDefinition[]; // Optional: only used in full mode
+  statusTypeDefault?: string; // Optional: only used in full mode
+  priorityTypeMapping?: SyncYamPriorityTypeMappingDefinition[]; // Optional: only used in full mode
+  priorityTypeDefault?: string; // Optional: only used in full mode
 
   maxBatchNumberIssues: number;
   dryRun?: boolean; // NEW: Dry-run mode flag
@@ -273,11 +273,18 @@ export class Configuration {
         (mapping) => mapping.name === project.useMapping.issueType,
       )?.default;
 
-      const statusTypeMapping = this.#statusTypeMappings.get(project.useMapping.statusType);
-      const statusTypeDefault = this.#syncYaml.statusTypeMappings.find(
-        (mapping) => mapping.name === project.useMapping.statusType,
-      )?.default;
+      // Status mapping is optional for basic mode (status derived from issue state)
+      // Required for full mode (maps Projects v2 board status)
+      let statusTypeMapping: SyncYamStatusTypeMappingDefinition[] | undefined;
+      let statusTypeDefault: string | undefined;
+      if (project.useMapping.statusType) {
+        statusTypeMapping = this.#statusTypeMappings.get(project.useMapping.statusType);
+        statusTypeDefault = this.#syncYaml.statusTypeMappings.find(
+          (mapping) => mapping.name === project.useMapping.statusType,
+        )?.default;
+      }
 
+      // Priority mapping is optional (only used in full mode with Projects v2)
       let priorityTypeMapping: SyncYamPriorityTypeMappingDefinition[] | undefined;
       let priorityTypeDefault: string | undefined;
       if (project.useMapping.priorityType) {
@@ -287,20 +294,24 @@ export class Configuration {
         )?.default;
       }
 
+      // Validate required mappings
       if (!issueTypeMapping) {
         throw new Error(`Issue type mapping not found for ${project.name}`);
       }
 
-      if (!statusTypeMapping) {
-        throw new Error(`Status type mapping not found for ${project.name}`);
-      }
-
-      if (!statusTypeDefault) {
-        throw new Error(`Default status type not found for ${project.name}`);
-      }
-
       if (!issueTypeDefault) {
-        throw new Error(`Default issue type type not found for ${project.name}`);
+        throw new Error(`Default issue type not found for ${project.name}`);
+      }
+
+      // For full mode, status mapping is required
+      const syncMode = project.github.syncMode || 'full';
+      if (syncMode === 'full') {
+        if (!statusTypeMapping) {
+          throw new Error(`Status type mapping not found for ${project.name} (required for full mode)`);
+        }
+        if (!statusTypeDefault) {
+          throw new Error(`Default status type not found for ${project.name} (required for full mode)`);
+        }
       }
 
       const projectConfiguration: ProjectConfiguration = {
