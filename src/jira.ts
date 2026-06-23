@@ -377,18 +377,9 @@ export class Jira {
    */
   private async tryJqlDescriptionSearch(githubUrl: string): Promise<string | undefined> {
     try {
-      // Extract repo and issue number for more precise searching
-      const urlMatch = githubUrl.match(/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/);
-      const issueNumber = urlMatch ? urlMatch[3] : null;
-
-      // Build JQL with project scoping and multiple search patterns
-      // Search for: full URL OR issue number pattern
-      let searchTerms = `"${githubUrl}"`;
-      if (issueNumber) {
-        searchTerms = `("${githubUrl}" OR "#${issueNumber}")`;
-      }
-
-      const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND description ~ ${searchTerms} ORDER BY updated DESC`;
+      // Use simple JQL to search description field with project scoping
+      // Note: JQL text search (~) doesn't support OR conditions, so we search the full URL
+      const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND description ~ "${githubUrl}" ORDER BY updated DESC`;
       const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJqlEnhancedSearch({
         jql,
         maxResults: 20,  // Increased from 5 to catch more potential matches
