@@ -358,11 +358,21 @@ export class Jira {
    */
   private async tryJqlDescriptionSearch(githubUrl: string): Promise<string | undefined> {
     try {
-      // Use simple JQL to search description field
-      const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND description ~ "${githubUrl}" ORDER BY created DESC`;
+      // Extract repo and issue number for more precise searching
+      const urlMatch = githubUrl.match(/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/);
+      const issueNumber = urlMatch ? urlMatch[3] : null;
+
+      // Build JQL with project scoping and multiple search patterns
+      // Search for: full URL OR issue number pattern
+      let searchTerms = `"${githubUrl}"`;
+      if (issueNumber) {
+        searchTerms = `("${githubUrl}" OR "#${issueNumber}")`;
+      }
+
+      const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND description ~ ${searchTerms} ORDER BY updated DESC`;
       const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJqlEnhancedSearch({
         jql,
-        maxResults: 5,
+        maxResults: 20,  // Increased from 5 to catch more potential matches
         fields: ['description', 'key'],
       });
 
@@ -396,14 +406,15 @@ export class Jira {
    */
   private async findByClientSideFiltering(githubUrl: string): Promise<string | undefined> {
     try {
-      console.log(`🔍 Fetching recent issues for client-side filtering...`);
+      console.log(`🔍 Fetching recent issues for client-side filtering (project: ${this.#projectConfiguration.jira.projectKey})...`);
 
       // CRITICAL: Order by UPDATED, not CREATED
       // This ensures old Jira issues that were recently updated in GitHub
       // will still appear in the search window
+      const maxResults = 150; // Increased from 100 to reduce false negatives
       const response = await this.#clientV3.issueSearch.searchForIssuesUsingJqlEnhancedSearch({
         jql: `project = "${this.#projectConfiguration.jira.projectKey}" ORDER BY updated DESC`, // ← ORDER BY UPDATED
-        maxResults: 100, // Last 100 UPDATED issues (not created)
+        maxResults,
         fields: ['description', 'key', 'created', 'updated'],
         validateQuery: 'none', // Skip JQL validation
       });
@@ -416,9 +427,9 @@ export class Jira {
       console.log(`📊 Checking ${response.issues.length} recently updated issues for GitHub URL...`);
 
       // Log warning if approaching limit
-      if (response.issues.length >= 95) {
+      if (response.issues.length >= maxResults * 0.95) {
         console.warn(
-          `⚠️  Approaching search limit (${response.issues.length}/100). Consider increasing maxResults.`,
+          `⚠️  Approaching search limit (${response.issues.length}/${maxResults}). Consider enabling GitHub Issue custom field.`,
         );
       }
 
