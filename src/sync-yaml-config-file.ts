@@ -1,5 +1,10 @@
 export type SyncYamlGitHubProjectFieldType = 'number' | 'singleSelect' | 'iteration';
 
+export interface TeamDefinition {
+  name: string;
+  members: string[];
+}
+
 export interface SyncYamlGitHubProject {
   name: string;
 
@@ -83,6 +88,8 @@ export interface SyncYamlSyncProject {
 }
 
 export interface SyncYaml {
+  teams?: TeamDefinition[]; // Optional: Define teams for assignee filtering
+
   githubProjects: SyncYamlGitHubProject[];
 
   statusTypeMappings: SyncYamStatusTypeMapping[];

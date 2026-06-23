@@ -2,6 +2,24 @@
 # This demonstrates syncing multiple repos with different modes in one configuration
 
 # ============================================================================
+# Team Definitions (Optional)
+# ============================================================================
+# Define teams once and reference them in assigneeAllowlist to avoid repetition
+# Useful for multi-repo setups where the same team works across many repos
+
+teams:
+  - name: platform
+    members:
+      - alice
+      - bob
+      - charlie
+
+  - name: frontend
+    members:
+      - dave
+      - eve
+
+# ============================================================================
 # GitHub Projects v2 Board Definitions
 # ============================================================================
 # Only needed for repos using syncMode: full (Projects v2 integration)
@@ -86,11 +104,10 @@ syncProjects:
       # BASIC MODE: No Projects v2, uses REST API
       syncMode: basic
 
-      # Filter to only team-assigned issues
+      # Filter to only team-assigned issues using team reference
+      # Expands to: alice, bob, charlie (from team definition above)
       assigneeAllowlist:
-        - alice
-        - bob
-        - charlie
+        - team:platform
 
     useMapping:
       issueType: Standard Issue Mapping
@@ -116,9 +133,10 @@ syncProjects:
       afterDate: "2026-06-01T00:00:00Z"
       syncMode: basic
 
-      # Could also filter by labels in sync logic (future enhancement)
+      # Mix team references and individual usernames
       assigneeAllowlist:
-        - yourteam-member
+        - team:platform  # Team members
+        - external-contributor  # Plus individual
 
     useMapping:
       issueType: Standard Issue Mapping

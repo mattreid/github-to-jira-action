@@ -434,6 +434,53 @@ github:
 - Works in both basic and full modes
 - Perfect for large public repos (reduces API calls by 50×+)
 
+#### Team Definitions (Multi-Repo Setups)
+
+For syncing many repos with the same team, define teams once and reference them:
+
+```yaml
+# Define teams at the top level
+teams:
+  - name: platform
+    members:
+      - alice
+      - bob
+      - charlie
+  
+  - name: frontend
+    members:
+      - dave
+      - eve
+
+syncProjects:
+  # Reference teams instead of repeating member lists
+  - name: "Kubernetes - Platform Team"
+    github:
+      owner: kubernetes
+      repo: kubernetes
+      assigneeAllowlist:
+        - team:platform  # Expands to alice, bob, charlie
+    jira:
+      projectKey: K8S
+
+  # Mix teams and individuals
+  - name: "Prometheus - Mixed"
+    github:
+      owner: prometheus
+      repo: prometheus
+      assigneeAllowlist:
+        - team:platform      # Team members
+        - external-contrib   # Plus individual
+    jira:
+      projectKey: PROM
+```
+
+**Benefits:**
+- Update team membership in one place
+- Reduce config duplication for multi-repo setups
+- Clear team ownership
+- Supports multi-team configurations
+
 ### Other Options
 
 - **Max Batch Size**: Control how many issues are synced in one batch. Set `maxBatchSize` to `0` to turn it off.

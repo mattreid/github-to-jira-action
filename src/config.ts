@@ -98,7 +98,58 @@ export class Configuration {
     return this.#githubReakToken;
   }
 
+  /**
+   * Expand team references in assigneeAllowlist to individual member lists
+   */
+  private expandAssigneeAllowlist(
+    allowlist: string[] | undefined,
+    projectName: string,
+  ): string[] | undefined {
+    if (!allowlist?.length) return allowlist;
+
+    const teams = this.#syncYaml.teams || [];
+    const expanded = new Set<string>();
+
+    for (const item of allowlist) {
+      if (item.startsWith('team:')) {
+        const teamName = item.substring(5);
+        const team = teams.find(t => t.name === teamName);
+
+        if (!team) {
+          const availableTeams = teams.map(t => t.name).join(', ');
+          throw new Error(
+            `Project "${projectName}": Team '${teamName}' not found. ` +
+            (availableTeams ? `Available teams: ${availableTeams}` : 'No teams defined in configuration.')
+          );
+        }
+
+        if (!team.members?.length) {
+          throw new Error(`Team '${teamName}' has no members defined`);
+        }
+
+        // Add all team members
+        team.members.forEach(member => expanded.add(member));
+      } else {
+        // Individual username
+        expanded.add(item);
+      }
+    }
+
+    return Array.from(expanded);
+  }
+
   init(): void {
+    // Validate team definitions
+    const teams = this.#syncYaml.teams || [];
+    for (const team of teams) {
+      if (!team.name) {
+        throw new Error('Team definition missing required field: name');
+      }
+      if (!team.members?.length) {
+        throw new Error(`Team '${team.name}' has no members defined`);
+      }
+    }
+
     // build a a map from statusTypeMappings
     for (const mappingObj of this.#syncYaml.statusTypeMappings) {
       this.#statusTypeMappings.set(mappingObj.name, mappingObj.mapping);
@@ -201,7 +252,7 @@ export class Configuration {
         readToken: this.#githubReakToken,
         startDate: moment(project.github.afterDate),
         syncMode: project.github.syncMode || 'full', // Default to 'full' for backward compatibility
-        assigneeAllowlist: project.github.assigneeAllowlist,
+        assigneeAllowlist: this.expandAssigneeAllowlist(project.github.assigneeAllowlist, project.name),
         projectFields,
       };
 
