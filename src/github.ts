@@ -203,7 +203,9 @@ export class GitHub {
       });
 
       if (!response.ok) {
-        throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+        const authMode = this.#projectConfiguration.github.readToken ? 'authenticated' : 'unauthenticated';
+        const repo = `${owner}/${repo}`;
+        throw new Error(`GitHub API error: ${response.status} ${response.statusText} (${authMode} mode, repo: ${repo})`);
       }
 
       const items: BasicIssue[] = await response.json();
@@ -247,7 +249,9 @@ export class GitHub {
       });
 
       if (!response.ok) {
-        throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+        const authMode = this.#projectConfiguration.github.readToken ? 'authenticated' : 'unauthenticated';
+        const repo = `${owner}/${repo}`;
+        throw new Error(`GitHub API error: ${response.status} ${response.statusText} (${authMode} mode, repo: ${repo})`);
       }
 
       const items: BasicIssue[] = await response.json();
