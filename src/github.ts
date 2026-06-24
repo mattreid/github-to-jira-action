@@ -161,13 +161,10 @@ export class GitHub {
 
     let allIssues: BasicIssue[] = [];
 
-    // If we have assignee whitelist, fetch per assignee for efficiency
+    // If we have assignee allowlist, fetch using search API with OR query (1 call vs N calls)
     if (assigneeAllowlist && assigneeAllowlist.length > 0) {
-      for (const assignee of assigneeAllowlist) {
-        info(`Fetching issues assigned to ${assignee}...`);
-        const issues = await this.fetchIssuesForAssignee(owner, repo, assignee, startDate);
-        allIssues.push(...issues);
-      }
+      info(`Fetching issues for ${assigneeAllowlist.length} assignees using optimized query...`);
+      allIssues = await this.fetchIssuesForAssignees(owner, repo, assigneeAllowlist, startDate);
     } else {
       // Fetch all issues (no filter)
       info(`Fetching all issues...`);
@@ -191,6 +188,79 @@ export class GitHub {
     return limitedIssues;
   }
 
+  /**
+   * Fetch issues for multiple assignees using search API (optimized)
+   * Reduces N API calls (one per assignee) to 1-2 calls (batched OR query)
+   *
+   * GitHub search query max length is ~256 chars, so we batch if needed
+   */
+  private async fetchIssuesForAssignees(
+    owner: string,
+    repo: string,
+    assignees: string[],
+    since: string
+  ): Promise<BasicIssue[]> {
+    // Build search query: repo:owner/repo is:issue updated:>=date (assignee:user1 OR assignee:user2 OR ...)
+    // Example: repo:eclipse-che/che is:issue updated:>=2026-06-01 (assignee:user1 OR assignee:user2)
+
+    const baseQuery = `repo:${owner}/${repo} is:issue updated:>=${since}`;
+
+    // GitHub search query has a practical limit (~256 chars for the URL)
+    // If assignee list is huge, we may need to batch into multiple queries
+    // Each "assignee:username OR " is ~20-30 chars, so we can fit ~50 assignees per query
+
+    const BATCH_SIZE = 50;
+    let allIssues: BasicIssue[] = [];
+
+    for (let i = 0; i < assignees.length; i += BATCH_SIZE) {
+      const batch = assignees.slice(i, i + BATCH_SIZE);
+      const assigneeQuery = batch.map(a => `assignee:${a}`).join(' ');
+      const fullQuery = `${baseQuery} ${assigneeQuery}`;
+
+      info(`  Batch ${Math.floor(i / BATCH_SIZE) + 1}: Searching for ${batch.length} assignees...`);
+
+      let page = 1;
+      while (true) {
+        const params = new URLSearchParams({
+          q: fullQuery,
+          per_page: '100',
+          page: page.toString(),
+          sort: 'updated',
+          order: 'asc',
+        });
+
+        const url = `https://api.github.com/search/issues?${params}`;
+        const response = await fetch(url, {
+          headers: this.getAuthHeaders(),
+        });
+
+        if (!response.ok) {
+          const authMode = this.#projectConfiguration.github.readToken ? 'authenticated' : 'unauthenticated';
+          throw new Error(`GitHub Search API error: ${response.status} ${response.statusText} (${authMode} mode, repo: ${owner}/${repo})`);
+        }
+
+        const data = await response.json() as { items: BasicIssue[] };
+        const items = data.items;
+
+        // Filter out pull requests
+        const issues = items.filter(item => !item.pull_request);
+        allIssues.push(...issues);
+
+        // Stop if no more results
+        if (items.length < 100) {
+          break;
+        }
+
+        page++;
+      }
+    }
+
+    return allIssues;
+  }
+
+  /**
+   * @deprecated Use fetchIssuesForAssignees for better performance (1 call vs N calls)
+   */
   private async fetchIssuesForAssignee(
     owner: string,
     repo: string,

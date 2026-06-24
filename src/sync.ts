@@ -35,6 +35,14 @@ export class Sync {
       );
 
       try {
+        // Check if repo has activity since last sync (optimization for nightly runs)
+        const hasActivity = await this.checkRepoActivity(projectConfiguration);
+        if (!hasActivity) {
+          console.log(`⏭️  Skipping ${projectConfiguration.name} - no activity since ${projectConfiguration.github.startDate.toISOString()}`);
+          endGroup();
+          continue;
+        }
+
         const syncRepository = new SyncRepository(projectConfiguration);
         const projectResult = await syncRepository.start();
         results.push({ syncProjectName: projectConfiguration.name, afterDate: projectResult.afterDate });
@@ -71,6 +79,46 @@ export class Sync {
   }
 
   async stop() {}
+
+  /**
+   * Check if repo has any activity since the last sync date
+   * Uses pushed_at field from repo metadata (cheap HEAD request)
+   *
+   * @returns true if repo should be synced, false to skip
+   */
+  private async checkRepoActivity(projectConfiguration: ProjectConfiguration): Promise<boolean> {
+    const { owner, repo, startDate, readToken } = projectConfiguration.github;
+
+    try {
+      const headers: HeadersInit = {
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      };
+
+      if (readToken) {
+        headers['Authorization'] = `token ${readToken}`;
+      }
+
+      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+
+      if (!response.ok) {
+        // If we can't check activity, assume repo should be synced (fail open)
+        console.warn(`⚠️  Could not check activity for ${owner}/${repo}: ${response.status}. Proceeding with sync.`);
+        return true;
+      }
+
+      const repoData = await response.json() as { pushed_at: string };
+      const lastPush = new Date(repoData.pushed_at);
+      const syncDate = startDate.toDate();
+
+      // If repo was pushed to after our sync date, there might be new issues
+      return lastPush >= syncDate;
+    } catch (error) {
+      // On error, fail open (sync the repo anyway)
+      console.warn(`⚠️  Error checking activity for ${owner}/${repo}: ${error}. Proceeding with sync.`);
+      return true;
+    }
+  }
 
   /**
    * Save incremental state after each successful repo sync
