@@ -416,7 +416,7 @@ export class SyncRepository {
         title: issue.title,
         body,
         state: issueState,
-        issuetype: this.getJiraIssueTypeFromGitHubLabels(labels),
+        issuetype: this.getJiraIssueType(issue, labels),
         status,
         resolution, // NEW: Add resolution field
         fixVersionId,
@@ -472,9 +472,33 @@ export class SyncRepository {
    * @param labels the GitHub labels
    * @returns matching Jira issue type or the default one
    */
-  getJiraIssueTypeFromGitHubLabels(labels: string[]): string {
-    // do we have an issue mapping ?
+  /**
+   * Get Jira issue type from GitHub issue
+   * Priority: structured type field → label matching → default
+   *
+   * @param issue - GitHub issue (REST or GraphQL format)
+   * @param labels - Array of label names (already extracted)
+   * @returns Jira issue type name
+   */
+  getJiraIssueType(issue: any, labels: string[]): string {
     const issueTypeMapping = this.#projectConfiguration.issueTypeMapping;
+
+    // Priority 1: Check structured type field (REST: type.name, GraphQL: issueType.name)
+    const typeName = ('type' in issue && issue.type?.name) ||
+                     ('issueType' in issue && issue.issueType?.name);
+
+    if (typeName && issueTypeMapping) {
+      // Try to match type.name through the same mapping config
+      // e.g., type.name="Bug" matches fromGithubLabel="Bug" → toJira="Bug"
+      const typeMatch = issueTypeMapping.find(
+        mapping => mapping.fromGithubLabel.toLowerCase() === typeName.toLowerCase()
+      );
+      if (typeMatch) {
+        return typeMatch.toJira;
+      }
+    }
+
+    // Priority 2: Fall back to label matching (existing logic)
     if (issueTypeMapping) {
       for (const mapping of issueTypeMapping) {
         if (labels.includes(mapping.fromGithubLabel)) {
@@ -483,7 +507,22 @@ export class SyncRepository {
       }
     }
 
-    // not found, default
+    // Priority 3: Default
+    return this.#projectConfiguration.issueTypeDefault;
+  }
+
+  /**
+   * @deprecated Use getJiraIssueType instead - kept for backward compatibility
+   */
+  getJiraIssueTypeFromGitHubLabels(labels: string[]): string {
+    const issueTypeMapping = this.#projectConfiguration.issueTypeMapping;
+    if (issueTypeMapping) {
+      for (const mapping of issueTypeMapping) {
+        if (labels.includes(mapping.fromGithubLabel)) {
+          return mapping.toJira;
+        }
+      }
+    }
     return this.#projectConfiguration.issueTypeDefault;
   }
 

@@ -28,6 +28,10 @@ export interface GraphQLSearchIssuesNode {
   labels: {
     nodes: { name: string }[];
   };
+  issueType?: {
+    id: string;
+    name: string;
+  };
   milestone?: GraphQLSearchIssuesNodeMilestone;
   projectItems: {
     projects: {
@@ -81,6 +85,16 @@ export interface BasicIssue {
   created_at: string;
   closed_at: string | null;
   labels: Array<{ name: string }>;
+  type?: {
+    id: number;
+    node_id: string;
+    name: string;
+    description: string;
+    color: string;
+    created_at: string;
+    updated_at: string;
+    is_enabled: boolean;
+  };
   milestone: {
     title: string;
     number: number;
@@ -338,6 +352,10 @@ query getRecentIssues($cursorAfter: String) {
             nodes {
               name
             }
+          }
+          issueType {
+            id
+            name
           }
           projectItems(first: 20, includeArchived: true) {
             projects: edges {
