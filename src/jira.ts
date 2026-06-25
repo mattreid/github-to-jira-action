@@ -612,6 +612,24 @@ export class Jira {
       console.log(`Found existing Jira issue ${issueKey}`);
     }
 
+    // For existing issues, fetch current state to detect changes
+    let existingIssue: any = null;
+    if (!isNewIssue) {
+      try {
+        // Fetch all fields we might update
+        const fieldsToFetch = ['status', 'resolution', 'fixVersions', 'description', 'priority'];
+        if (this.#storyPointsFieldId) {
+          fieldsToFetch.push(this.#storyPointsFieldId);
+        }
+        existingIssue = await this.#client.issues.getIssue({
+          issueIdOrKey: issueKey,
+          fields: fieldsToFetch,
+        });
+      } catch (fetchError) {
+        console.warn(`⚠️  Could not fetch existing issue ${issueKey} for comparison. Will update anyway.`);
+      }
+    }
+
     // Only create remote link for new issues (existing issues should already have it)
     if (isNewIssue) {
       try {
@@ -695,11 +713,46 @@ export class Jira {
       }),
     };
 
-    try {
-      await this.#client.issues.editIssue({
-        issueIdOrKey: issueKey,
-        fields: updateFields,
-      });
+    // For existing issues, check if anything actually changed before updating
+    let needsUpdate = isNewIssue; // New issues always need update
+    if (!isNewIssue && existingIssue) {
+      // Compare fields that can change
+      const statusChanged = createOrUpdateIssueParams.status !== existingIssue.fields?.status?.name;
+      const resolutionChanged = createOrUpdateIssueParams.resolution !== existingIssue.fields?.resolution?.name;
+
+      const existingFixVersionIds = existingIssue.fields?.fixVersions?.map((v: any) => v.id) || [];
+      const newFixVersionIds = fixVersions?.map(v => v.id) || [];
+      const fixVersionChanged = JSON.stringify(existingFixVersionIds.sort()) !== JSON.stringify(newFixVersionIds.sort());
+
+      const descriptionChanged = descriptionWithGitHubLink !== existingIssue.fields?.description;
+
+      // Full mode fields: story points and priority
+      let storyPointsChanged = false;
+      if (this.#storyPointsFieldId && createOrUpdateIssueParams.storyPoints !== undefined) {
+        storyPointsChanged = createOrUpdateIssueParams.storyPoints !== existingIssue.fields?.[this.#storyPointsFieldId];
+      }
+
+      let priorityChanged = false;
+      if (createOrUpdateIssueParams.priority) {
+        priorityChanged = createOrUpdateIssueParams.priority !== existingIssue.fields?.priority?.name;
+      }
+
+      // Note: Sprint assignment is checked separately below (requires different API call)
+      // Status transitions are also handled separately (requires fetching current status)
+
+      needsUpdate = statusChanged || resolutionChanged || fixVersionChanged || descriptionChanged || storyPointsChanged || priorityChanged;
+
+      if (!needsUpdate) {
+        console.log(`  No changes detected for ${issueKey}, skipping update`);
+      }
+    }
+
+    if (needsUpdate) {
+      try {
+        await this.#client.issues.editIssue({
+          issueIdOrKey: issueKey,
+          fields: updateFields,
+        });
     } catch (editError: unknown) {
       const error = editError as { response?: { status?: number; data?: unknown } };
       if (error.response?.status === 410) {
@@ -714,9 +767,10 @@ export class Jira {
       } else {
         throw editError;
       }
+      }
     }
 
-    // do the transitions for the status
+    // do the transitions for the status (only if we updated)
     const toStatus = createOrUpdateIssueParams.status;
 
     try {
@@ -763,7 +817,9 @@ export class Jira {
     }
 
     console.log(`✅ Successfully processed issue ${issueKey}`);
-    return { key: issueKey, created: isNewIssue, skipped: false };
+    // Metrics: created = new issue, skipped = existing issue with no changes
+    const wasSkipped = !isNewIssue && !needsUpdate;
+    return { key: issueKey, created: isNewIssue, skipped: wasSkipped };
   }
 
   async getTransitionId(issueKey: string, targetStatus: string): Promise<string | undefined> {
