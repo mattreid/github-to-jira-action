@@ -127,8 +127,8 @@ export class Sync {
   async stop() {}
 
   /**
-   * Check if repo has any activity since the last sync date
-   * Uses pushed_at field from repo metadata (cheap HEAD request)
+   * Check if repo has any issue activity since the last sync date
+   * Queries the issues API for the most recently updated issue
    *
    * @returns true if repo should be synced, false to skip
    */
@@ -145,7 +145,15 @@ export class Sync {
         headers['Authorization'] = `token ${readToken}`;
       }
 
-      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+      // Check for most recently updated issue (1 API call)
+      const params = new URLSearchParams({
+        state: 'all',
+        per_page: '1',
+        sort: 'updated',
+        direction: 'desc',
+      });
+
+      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues?${params}`, { headers });
 
       if (!response.ok) {
         // If we can't check activity, assume repo should be synced (fail open)
@@ -153,12 +161,18 @@ export class Sync {
         return true;
       }
 
-      const repoData = await response.json() as { pushed_at: string };
-      const lastPush = new Date(repoData.pushed_at);
+      const issues = await response.json() as Array<{ updated_at: string }>;
+
+      // No issues at all = skip
+      if (issues.length === 0) {
+        return false;
+      }
+
+      const lastIssueUpdate = new Date(issues[0].updated_at);
       const syncDate = startDate.toDate();
 
-      // If repo was pushed to after our sync date, there might be new issues
-      return lastPush >= syncDate;
+      // If most recent issue was updated after our sync date, sync the repo
+      return lastIssueUpdate >= syncDate;
     } catch (error) {
       // On error, fail open (sync the repo anyway)
       console.warn(`⚠️  Error checking activity for ${owner}/${repo}: ${error}. Proceeding with sync.`);
