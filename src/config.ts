@@ -208,11 +208,6 @@ export class Configuration {
       const agileProject = projectsV2BoardName ? this.#githubProjects.get(projectsV2BoardName) : undefined;
       const projectFields: ProjectConfigurationGitHubField[] = [];
 
-      console.log(`🔍 CONFIG: Sync mode: ${project.github.syncMode || 'full'}`);
-      console.log(`🔍 CONFIG: GitHub Projects v2 board: "${projectsV2BoardName || 'N/A (basic mode)'}"`);
-      console.log(`🔍 CONFIG: Available board definitions:`, Array.from(this.#githubProjects.keys()));
-      console.log(`🔍 CONFIG: Found board definition:`, agileProject ? 'YES' : 'NO');
-
       if (agileProject) {
         if (agileProject.storyPoints) {
           projectFields.push({
@@ -243,8 +238,6 @@ export class Configuration {
           });
         }
       }
-
-      console.log(`🔍 CONFIG: Built ${projectFields.length} project fields:`, projectFields.map(f => f.alias));
 
       const github: ProjectConfigurationGitHub = {
         owner: project.github.owner,
