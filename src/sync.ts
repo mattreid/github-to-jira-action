@@ -46,6 +46,17 @@ export class Sync {
         if (!hasActivity) {
           console.log(`⏭️  Skipping ${projectConfiguration.name} - no activity since ${projectConfiguration.github.startDate.toISOString()}`);
           skippedRepos++;
+
+          // Save state even for skipped repos to preserve their afterDate
+          results.push({
+            syncProjectName: projectConfiguration.name,
+            afterDate: projectConfiguration.github.startDate.toISOString(),
+            issuesCreated: 0,
+            issuesUpdated: 0,
+            issuesSkipped: 0,
+          });
+          await this.saveIncrementalState(results);
+
           endGroup();
           continue;
         }
