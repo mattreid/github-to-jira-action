@@ -161,10 +161,20 @@ export class GitHub {
 
     let allIssues: BasicIssue[] = [];
 
-    // If we have assignee allowlist, fetch using search API with OR query (1 call vs N calls)
+    // If we have assignee allowlist, try optimized search API first, fall back to per-assignee
     if (assigneeAllowlist && assigneeAllowlist.length > 0) {
       info(`Fetching issues for ${assigneeAllowlist.length} assignees using optimized query...`);
-      allIssues = await this.fetchIssuesForAssignees(owner, repo, assigneeAllowlist, startDate);
+      try {
+        allIssues = await this.fetchIssuesForAssignees(owner, repo, assigneeAllowlist, startDate);
+      } catch (error) {
+        // If search API fails (422 or other), fall back to per-assignee queries
+        console.warn(`⚠️  Search API failed, falling back to per-assignee queries: ${error}`);
+        for (const assignee of assigneeAllowlist) {
+          info(`  Fetching issues assigned to ${assignee}...`);
+          const issues = await this.fetchIssuesForAssignee(owner, repo, assignee, startDate);
+          allIssues.push(...issues);
+        }
+      }
     } else {
       // Fetch all issues (no filter)
       info(`Fetching all issues...`);
@@ -236,6 +246,9 @@ export class GitHub {
 
         if (!response.ok) {
           const authMode = this.#projectConfiguration.github.readToken ? 'authenticated' : 'unauthenticated';
+          const errorBody = await response.json().catch(() => ({}));
+          console.error(`Search query that failed: ${fullQuery}`);
+          console.error(`Error response:`, errorBody);
           throw new Error(`GitHub Search API error: ${response.status} ${response.statusText} (${authMode} mode, repo: ${owner}/${repo})`);
         }
 
