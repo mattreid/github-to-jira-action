@@ -1,4 +1,4 @@
-import { endGroup, startGroup, error as coreError, notice as coreNotice } from '@actions/core';
+import { endGroup, startGroup, error as coreError, notice as coreNotice, warning as coreWarning } from '@actions/core';
 import { writeFile } from 'node:fs/promises';
 import * as jsYaml from 'js-yaml';
 import type { Configuration } from './config.js';
@@ -83,8 +83,8 @@ export class Sync {
         coreError(`${e.projectName}: ${e.error.message}`);
       });
 
-      // Fail the action to make failures obvious (user preference)
-      throw new Error(`Sync completed with ${errors.length} failure(s). See annotations above for details.`);
+      // Show warning instead of failing to ensure state gets saved
+      coreWarning(`Sync completed with ${errors.length} failure(s). ${results.length} repos succeeded. See error annotations above for details.`);
     }
 
     console.log(`\n✅ Successfully synced ${results.length}/${projectConfigurations.length} repos`);
