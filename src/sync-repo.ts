@@ -213,8 +213,14 @@ export class SyncRepository {
     }
   }
 
-  async start(): Promise<{ afterDate: string }> {
+  async start(): Promise<{ afterDate: string; issuesCreated: number; issuesUpdated: number; issuesSkipped: number }> {
     startGroup('🚥 Init and sync...');
+
+    // Track metrics
+    let issuesCreated = 0;
+    let issuesUpdated = 0;
+    let issuesSkipped = 0;
+
     // check JIRA is connected and do checks
     info('Check JIRA is available');
     await this.#jira.initAndCheck();
@@ -434,7 +440,14 @@ export class SyncRepository {
 
       // create the issue in Jira
       try {
-        await this.#jira.createOrUpdateIssue(issueToCreate);
+        const result = await this.#jira.createOrUpdateIssue(issueToCreate);
+        if (result.created) {
+          issuesCreated++;
+        } else if (result.skipped) {
+          issuesSkipped++;
+        } else {
+          issuesUpdated++;
+        }
       } catch (err: unknown) {
         if (isDebug()) {
           console.error(err);
@@ -453,7 +466,14 @@ export class SyncRepository {
             warning('Jira unauthorized/throttling rate limit reached, pausing for 30s before retrying');
             isThrottled = true;
             await new Promise((resolve) => setTimeout(resolve, 30000));
-            await this.#jira.createOrUpdateIssue(issueToCreate);
+            const retryResult = await this.#jira.createOrUpdateIssue(issueToCreate);
+            if (retryResult.created) {
+              issuesCreated++;
+            } else if (retryResult.skipped) {
+              issuesSkipped++;
+            } else {
+              issuesUpdated++;
+            }
           }
         }
         if (!isThrottled) {
@@ -462,7 +482,12 @@ export class SyncRepository {
       }
     }
     endGroup();
-    return { afterDate: recentIssuesSearch.afterDate };
+    return {
+      afterDate: recentIssuesSearch.afterDate,
+      issuesCreated,
+      issuesUpdated,
+      issuesSkipped,
+    };
   }
 
   async stop() {}

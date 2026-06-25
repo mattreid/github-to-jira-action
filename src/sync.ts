@@ -1,4 +1,4 @@
-import { endGroup, startGroup, error as coreError } from '@actions/core';
+import { endGroup, startGroup, error as coreError, notice as coreNotice } from '@actions/core';
 import { writeFile } from 'node:fs/promises';
 import * as jsYaml from 'js-yaml';
 import type { Configuration } from './config.js';
@@ -12,6 +12,11 @@ export interface SyncProjectResult {
 
   // date to use for the next sync
   afterDate: string;
+
+  // metrics for this sync
+  issuesCreated?: number;
+  issuesUpdated?: number;
+  issuesSkipped?: number;  // deduplication prevented
 }
 export class Sync {
   #configuration: Configuration;
@@ -26,6 +31,7 @@ export class Sync {
 
     const results: SyncProjectResult[] = [];
     const errors: Array<{ projectName: string; error: Error }> = [];
+    let skippedRepos = 0;
 
     // Loop sequentially through each project configuration
     // Continue on errors to maximize partial progress
@@ -39,13 +45,20 @@ export class Sync {
         const hasActivity = await this.checkRepoActivity(projectConfiguration);
         if (!hasActivity) {
           console.log(`⏭️  Skipping ${projectConfiguration.name} - no activity since ${projectConfiguration.github.startDate.toISOString()}`);
+          skippedRepos++;
           endGroup();
           continue;
         }
 
         const syncRepository = new SyncRepository(projectConfiguration);
         const projectResult = await syncRepository.start();
-        results.push({ syncProjectName: projectConfiguration.name, afterDate: projectResult.afterDate });
+        results.push({
+          syncProjectName: projectConfiguration.name,
+          afterDate: projectResult.afterDate,
+          issuesCreated: projectResult.issuesCreated,
+          issuesUpdated: projectResult.issuesUpdated,
+          issuesSkipped: projectResult.issuesSkipped,
+        });
 
         // Save state immediately after successful sync
         // This ensures partial progress is preserved even if later repos fail
@@ -75,6 +88,28 @@ export class Sync {
     }
 
     console.log(`\n✅ Successfully synced ${results.length}/${projectConfigurations.length} repos`);
+
+    // Calculate totals and create summary annotation
+    const totalCreated = results.reduce((sum, r) => sum + (r.issuesCreated || 0), 0);
+    const totalUpdated = results.reduce((sum, r) => sum + (r.issuesUpdated || 0), 0);
+    const totalSkipped = results.reduce((sum, r) => sum + (r.issuesSkipped || 0), 0);
+
+    const summary = [
+      `📊 Sync Summary:`,
+      `  • Repos synced: ${results.length}`,
+      `  • Repos skipped (no activity): ${skippedRepos}`,
+      `  • Issues created: ${totalCreated}`,
+      `  • Issues updated: ${totalUpdated}`,
+      `  • Issues skipped (already synced): ${totalSkipped}`,
+    ].join('\n');
+
+    console.log(`\n${summary}`);
+
+    // Create annotation for GitHub Actions UI
+    if (results.length > 0 || skippedRepos > 0) {
+      coreNotice(summary);
+    }
+
     return results;
   }
 

@@ -527,7 +527,7 @@ export class Jira {
     }
   }
 
-  async createOrUpdateIssue(createOrUpdateIssueParams: CreateIssueParams): Promise<{ key: string }> {
+  async createOrUpdateIssue(createOrUpdateIssueParams: CreateIssueParams): Promise<{ key: string; created: boolean; skipped: boolean }> {
     // DRY RUN MODE: Just log what would happen
     if (this.#projectConfiguration.dryRun) {
       console.log('\n🔍 [DRY RUN] Would create/update Jira issue:');
@@ -541,7 +541,7 @@ export class Jira {
       console.log(`   Sprint: ${createOrUpdateIssueParams.sprintBoardId || 'None'}`);
       console.log(`   GitHub URL: ${createOrUpdateIssueParams.remoteLinkUrl}`);
       console.log(`   Global ID: ${createOrUpdateIssueParams.globalId}`);
-      return { key: 'DRY-RUN-123' };
+      return { key: 'DRY-RUN-123', created: false, skipped: true };
     }
 
     if (!this.#storyPointsFieldId) {
@@ -763,7 +763,7 @@ export class Jira {
     }
 
     console.log(`✅ Successfully processed issue ${issueKey}`);
-    return { key: issueKey };
+    return { key: issueKey, created: isNewIssue, skipped: false };
   }
 
   async getTransitionId(issueKey: string, targetStatus: string): Promise<string | undefined> {
