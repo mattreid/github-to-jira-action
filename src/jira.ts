@@ -200,13 +200,13 @@ export class Jira {
       if (this.#projectConfiguration.jira.useGitHubIssueField) {
         info(`✅ Found GitHub Issue custom field (enabled for ${this.#projectConfiguration.jira.projectKey}): ${githubIssueField.id}`);
       } else {
-        info(`ℹ️  GitHub Issue custom field found but not enabled for ${this.#projectConfiguration.jira.projectKey} - using remote links API`);
+        info(`ℹ️  GitHub Issue custom field found but not enabled for ${this.#projectConfiguration.jira.projectKey} - using description search`);
       }
     } else {
       if (this.#projectConfiguration.jira.useGitHubIssueField) {
         console.warn(`⚠️  GitHub Issue custom field configured but not found in ${this.#projectConfiguration.jira.projectKey}`);
       }
-      info('ℹ️  GitHub Issue custom field not found - using remote links API for deduplication');
+      info('ℹ️  GitHub Issue custom field not found - using description search for deduplication');
     }
   }
 
