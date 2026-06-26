@@ -100,6 +100,8 @@ export interface SyncYaml {
   issuesTypeMappings: SyncYamlIssuesTypeMapping[];
 
   syncProjects: SyncYamlSyncProject[];
+
+  jiraProjectsWithGitHubIssueField?: string[]; // Optional: Jira project keys that have GitHub Issue field enabled
 }
 
 export interface SyncStateYaml {

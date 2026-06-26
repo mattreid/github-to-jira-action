@@ -197,8 +197,15 @@ export class Jira {
     const githubIssueField = fields.find((field) => field.name === 'GitHub Issue');
     if (githubIssueField && githubIssueField.id) {
       this.#githubIssueFieldId = githubIssueField.id;
-      info(`✅ Found GitHub Issue custom field (enables reliable deduplication): ${githubIssueField.id}`);
+      if (this.#projectConfiguration.jira.useGitHubIssueField) {
+        info(`✅ Found GitHub Issue custom field (enabled for ${this.#projectConfiguration.jira.projectKey}): ${githubIssueField.id}`);
+      } else {
+        info(`ℹ️  GitHub Issue custom field found but not enabled for ${this.#projectConfiguration.jira.projectKey} - using remote links API`);
+      }
     } else {
+      if (this.#projectConfiguration.jira.useGitHubIssueField) {
+        console.warn(`⚠️  GitHub Issue custom field configured but not found in ${this.#projectConfiguration.jira.projectKey}`);
+      }
       info('ℹ️  GitHub Issue custom field not found - using remote links API for deduplication');
     }
   }
@@ -293,8 +300,9 @@ export class Jira {
   }
 
   async findExistingGithubIssueInJira(remoteId: string, githubUrl?: string): Promise<string | undefined> {
-    // If we have the GitHub Issue custom field, use it for reliable searching
-    if (this.#githubIssueFieldId && githubUrl) {
+    // Only use GitHub Issue custom field if enabled for this project
+    // (field must exist AND be configured for use - no point searching empty field)
+    if (this.#githubIssueFieldId && this.#projectConfiguration.jira.useGitHubIssueField && githubUrl) {
       return await this.findExistingIssueByCustomField(githubUrl);
     }
 
@@ -816,6 +824,28 @@ export class Jira {
           console.error(`❌ Sprint assignment failed:`, error);
           throw sprintError;
         }
+      }
+    }
+
+    // Set GitHub Issue custom field if enabled for this project
+    if (this.#githubIssueFieldId && this.#projectConfiguration.jira.useGitHubIssueField) {
+      try {
+        await this.#client.issues.editIssue({
+          issueIdOrKey: issueKey,
+          fields: {
+            [this.#githubIssueFieldId]: createOrUpdateIssueParams.remoteLinkUrl,
+          },
+        });
+        debug(`  🔗 Set GitHub Issue field: ${createOrUpdateIssueParams.remoteLinkUrl}`);
+      } catch (fieldError: unknown) {
+        const error = fieldError as { response?: { status?: number; data?: unknown } };
+        console.error(
+          `❌ Failed to set GitHub Issue field (${this.#githubIssueFieldId}). ` +
+          `Ensure field is on Edit screen layout. Status: ${error.response?.status}`,
+        );
+        console.error(`   Error details:`, error);
+        // Throw - if configured to use the field, failures should be visible
+        throw fieldError;
       }
     }
 

@@ -47,6 +47,7 @@ export interface ProjectConfiguration {
     component: string[]; // Always normalized to array internally
     globalIdPrefix: string;
     sprintBoard?: string; // Optional: only used in full mode for sprint sync
+    useGitHubIssueField: boolean; // Whether to use GitHub Issue custom field for this project
   };
   issueTypeDefault: string;
   issueTypeMapping: SyncYamlIssuesTypeMappingDefinition[];
@@ -256,6 +257,9 @@ export class Configuration {
         ? project.jira.component
         : [project.jira.component];
 
+      // Check if this Jira project has GitHub Issue field enabled
+      const useGitHubIssueField = this.#syncYaml.jiraProjectsWithGitHubIssueField?.includes(project.jira.projectKey) || false;
+
       const jira = {
         host: this.#jiraHost,
         email: this.#jiraEmail,
@@ -264,6 +268,7 @@ export class Configuration {
         globalIdPrefix: project.jira.globalIdPrefix,
         sprintBoard: project.jira.sprintBoard,
         component: componentList,
+        useGitHubIssueField,
       };
 
       const maxBatchNumberIssues = project.maxBatchSize;
