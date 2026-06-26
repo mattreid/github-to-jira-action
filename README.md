@@ -9,7 +9,10 @@ Welcome to **GitHub to Jira Action**! This GitHub Action automates the synchroni
 - **Basic Mode**: Sync issue state, labels, milestones - no GitHub token required for public repos!
 - **Full Mode**: Map **sprint**, **story points**, **status**, and **priority** from GitHub Projects v2 to Jira
 - **Assignee filtering**: Only sync issues assigned to your team members (server-side filtering for efficiency)
-- **Incremental sync**: Automatically tracks last sync time, only fetches updated issues
+- **Incremental sync**: Automatically tracks last sync time, only fetches updated issues with per-repo state tracking
+- **Multiple components**: Assign multiple Jira components per issue (e.g., repo + team)
+- **Auto-prefixed titles**: Automatically prefix Jira issue titles with team/repo identifier for easy visual identification
+- **GitHub Issue field support**: Optional integration with Jira's custom GitHub Issue field for reliable deduplication
 - **Dry-run mode**: Test configuration without creating Jira issues
 - Supports **batch synchronization** with custom batch size configurations
   
@@ -61,10 +64,13 @@ This GitHub Action reads configuration from a YAML file to map your GitHub issue
 
 ### Incremental Sync (Automatic)
 
-The action automatically implements incremental sync:
+The action automatically implements incremental sync with per-repo state tracking:
 - **First run**: Syncs all issues since configured `afterDate`
 - **Subsequent runs**: Only fetches issues updated since last sync
-- **State persistence**: Saves last sync timestamp to `sync-state.yaml`
+- **Per-repo state**: Each repository tracks its own last sync timestamp independently
+- **State persistence**: Automatically saved after each successful repo sync to `sync-state.yaml`
+- **Error recovery**: If one repo fails, other repos still save their state and progress
+- **Activity detection**: Automatically skips repos with no recent issue activity (saves API calls)
 - **Efficiency**: Reduces API usage by 10-20× after initial sync
 
 No configuration needed - incremental sync is always enabled!
@@ -123,7 +129,11 @@ syncProjects:
       issueType: Basic Issue Mapping
     jira:
       projectKey: EXT
-      component: External
+      component: External           # Single component
+      # Or multiple components:
+      # component:
+      #   - external-org/public-repo
+      #   - External Team
       globalIdPrefix: EXT
     maxBatchSize: 50
 ```
@@ -515,6 +525,86 @@ syncProjects:
 - Reduce config duplication for multi-repo setups
 - Clear team ownership
 - Supports multi-team configurations
+
+### Multiple Components
+
+Assign multiple Jira components to each issue for better organization:
+
+```yaml
+syncProjects:
+  - name: "Platform - kubernetes/kubernetes"
+    jira:
+      projectKey: K8S
+      component:
+        - kubernetes/kubernetes  # Repo component
+        - Platform Team          # Team component
+```
+
+**Benefits:**
+- Track both repo and team ownership
+- Filter issues by multiple dimensions in Jira
+- Backwards compatible (single string still works)
+- Set once on creation, opportunistically updated when other fields change
+
+### Title Prefixing
+
+Automatically prefix Jira issue titles with team or repo identifier:
+
+```yaml
+syncProjects:
+  # Auto-extracted from name (before ' - ')
+  - name: "Platform Team - kubernetes/kubernetes"
+    # Creates: "[Platform Team] Fix authentication bug"
+  
+  # Single repo name
+  - name: "my-repo"
+    # Creates: "[my-repo] Add new feature"
+  
+  # Custom override
+  - name: "kubernetes/extension-very-long-name"
+    titlePrefix: "K8s-Ext"
+    # Creates: "[K8s-Ext] Issue title"
+  
+  # Disable prefix
+  - name: "test-repo"
+    titlePrefix: ""
+    # Creates: "Issue title" (no prefix)
+```
+
+**Benefits:**
+- Casual viewers can identify issues without checking components
+- Zero config for standard naming patterns ("Team - repo")
+- Optional override for cleaner prefixes
+- Can disable per-repo
+
+### GitHub Issue Custom Field
+
+Enable Jira's GitHub Issue custom field for fast, reliable deduplication:
+
+```yaml
+# At top level (after teams, before syncProjects)
+jiraProjectsWithGitHubIssueField:
+  - PROJECT1
+  - PROJECT2
+
+syncProjects:
+  # All repos using PROJECT1 automatically use the field
+  - name: "Repo"
+    jira:
+      projectKey: PROJECT1  # Uses GitHub Issue field
+```
+
+**Setup:**
+1. Work with Jira admin to create "GitHub Issue" custom field
+2. Add field to Edit screen layout
+3. Add project key to `jiraProjectsWithGitHubIssueField`
+4. Issues are populated automatically
+
+**Benefits:**
+- 10× faster deduplication (JQL search instead of remote links API)
+- One config line controls all repos in the project
+- No wasted API calls until field is ready
+- Opt-in only (no surprises)
 
 ### Other Options
 
