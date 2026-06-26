@@ -300,33 +300,46 @@ export class Jira {
   }
 
   async findExistingGithubIssueInJira(remoteId: string, githubUrl?: string): Promise<string | undefined> {
-    // Only use GitHub Issue custom field if enabled for this project
-    // (field must exist AND be configured for use - no point searching empty field)
-    if (this.#githubIssueFieldId && this.#projectConfiguration.jira.useGitHubIssueField && githubUrl) {
-      return await this.findExistingIssueByCustomField(githubUrl);
+    if (!githubUrl) {
+      // No URL provided - can't deduplicate
+      console.warn(`⚠️  No GitHub URL provided for deduplication (remoteId: ${remoteId})`);
+      return undefined;
     }
 
-    // Otherwise fall back to remote links API (may be unreliable)
-    try {
-      // Try the JQL function first (works in some Jira Cloud instances)
-      const jql = `issue in issuesWithRemoteLinksByGlobalId("${remoteId}") and project = "${this.#projectConfiguration.jira.projectKey}"`;
-      const query = { jql, maxResults: 1 };
-      const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJqlEnhancedSearch(query);
-      return issues.issues?.[0]?.key;
-    } catch (searchError: unknown) {
-      const error = searchError as { response?: { status?: number } };
-      if (error.response?.status === 410) {
-        // JQL function is deprecated, fall back to fetching all project issues and checking remote links
-        console.warn(
-          `⚠️  JQL remote links function deprecated (410). Falling back to checking remote links via API...`,
-        );
-        return await this.findExistingIssueByRemoteLinkAPI(remoteId);
+    // If GitHub Issue custom field is enabled, try that first (fast, structured search)
+    if (this.#githubIssueFieldId && this.#projectConfiguration.jira.useGitHubIssueField) {
+      const customFieldResult = await this.findExistingIssueByCustomField(githubUrl);
+      if (customFieldResult) {
+        console.log(`✅ Found existing issue ${customFieldResult} via GitHub Issue custom field`);
+        return customFieldResult;
       }
-      throw searchError;
+      // Custom field enabled but not found - might be an old issue without field data
+      // Fall through to description search
+      console.log(`ℹ️  Not found in GitHub Issue field, trying description search...`);
     }
+
+    // Search by description (works for all issues, slower)
+    return await this.findExistingIssueByDescriptionSearch(githubUrl);
   }
 
   private async findExistingIssueByCustomField(githubUrl: string): Promise<string | undefined> {
+    // Search by GitHub Issue custom field (fast, structured search)
+    if (!this.#githubIssueFieldId) {
+      return undefined;
+    }
+
+    try {
+      const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND "${this.#githubIssueFieldId}" ~ "${githubUrl}"`;
+      const query = { jql, maxResults: 1 };
+      const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJqlEnhancedSearch(query);
+      return issues.issues?.[0]?.key;
+    } catch (error) {
+      console.warn(`⚠️  GitHub Issue custom field search failed:`, error);
+      return undefined;
+    }
+  }
+
+  private async findExistingIssueByDescriptionSearch(githubUrl: string): Promise<string | undefined> {
     console.log(`🔍 Searching for existing issue with URL: ${githubUrl}`);
 
     // Try 1: Simple JQL search (fastest if it works)
@@ -489,52 +502,6 @@ export class Jira {
 
       console.error(`❌ Client-side filtering failed (status ${err.response?.status}):`, err.response?.data);
       return undefined;
-    }
-  }
-
-  private async findExistingIssueByRemoteLinkAPI(remoteId: string): Promise<string | undefined> {
-    // Fallback: Search for issues in the project and check their remote links via v3 API
-    // This is slower but works when the JQL function is deprecated
-    try {
-      const jql = `project = "${this.#projectConfiguration.jira.projectKey}" ORDER BY created DESC`;
-      const query = { jql, maxResults: 100, fields: ['key'] }; // Only need key field
-      const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJqlEnhancedSearch(query);
-
-      for (const issue of issues.issues || []) {
-        try {
-          const remoteLinks = await this.#clientV3.issueRemoteLinks.getRemoteIssueLinks({
-            issueIdOrKey: issue.key,
-          });
-
-          const hasMatchingLink = remoteLinks.some((link) => link.globalId === remoteId);
-          if (hasMatchingLink) {
-            return issue.key;
-          }
-        } catch (linkError: unknown) {
-          const error = linkError as { response?: { status?: number; data?: unknown } };
-          if (error.response?.status === 410) {
-            // Known Jira bug (JRACLOUD-28064): GET also returns 410
-            // Since we can't reliably search for existing issues, fall back to URL-based search
-            console.warn(
-              `⚠️  Remote links GET API returns 410 (known Jira bug). Cannot search by remote links.`,
-            );
-            // Stop trying remote links API - will fall back to creating new issues
-            return undefined;
-          }
-          // If we can't get remote links for this issue for other reasons, skip it
-          continue;
-        }
-      }
-
-      return undefined;
-    } catch (searchError: unknown) {
-      const error = searchError as { response?: { status?: number } };
-      if (error.response?.status === 410) {
-        // Remote links API is completely unavailable - return undefined to create new issues
-        console.warn(`⚠️  Remote links API unavailable (410). Will create new issues without deduplication.`);
-        return undefined;
-      }
-      throw searchError;
     }
   }
 
