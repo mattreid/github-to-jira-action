@@ -3,6 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import * as jsYaml from 'js-yaml';
 import type { Configuration } from './config.js';
 import type { ProjectConfiguration } from './config.js';
+import { Jira } from './jira.js';
 import { SyncRepository } from './sync-repo.js';
 import type { SyncStateYaml } from './sync-yaml-config-file.js';
 
@@ -33,6 +34,10 @@ export class Sync {
     const errors: Array<{ projectName: string; error: Error }> = [];
     let skippedRepos = 0;
 
+    // Cache Jira clients per project to avoid redundant initialization
+    // Multiple repos can share the same Jira project (e.g., 67 repos in DPROD)
+    const jiraCache = new Map<string, Jira>();
+
     // Loop sequentially through each project configuration
     // Continue on errors to maximize partial progress
     for (const projectConfiguration of projectConfigurations) {
@@ -61,7 +66,18 @@ export class Sync {
           continue;
         }
 
-        const syncRepository = new SyncRepository(projectConfiguration);
+        // Get or create cached Jira client for this project
+        const projectKey = projectConfiguration.jira.projectKey;
+        let jira = jiraCache.get(projectKey);
+
+        if (!jira) {
+          // First repo for this Jira project - initialize once
+          jira = new Jira(projectConfiguration);
+          await jira.initAndCheck();
+          jiraCache.set(projectKey, jira);
+        }
+
+        const syncRepository = new SyncRepository(projectConfiguration, jira);
         const projectResult = await syncRepository.start();
         results.push({
           syncProjectName: projectConfiguration.name,

@@ -27,11 +27,15 @@ export class SyncRepository {
   // map between the name of the sprint in Jira and the id
   #sprints: Map<string, number> = new Map();
 
-  constructor(projectConfiguration: ProjectConfiguration) {
+  #jiraWasProvided: boolean;
+
+  constructor(projectConfiguration: ProjectConfiguration, jira?: Jira) {
     this.#projectConfiguration = projectConfiguration;
     this.#github = new GitHub(this.#projectConfiguration);
 
-    this.#jira = new Jira(this.#projectConfiguration);
+    // Use provided Jira instance (cached) or create new one
+    this.#jiraWasProvided = !!jira;
+    this.#jira = jira || new Jira(this.#projectConfiguration);
   }
 
   protected fromGithubMilestoneToJiraRelease(githubMilestone: GraphQLSearchIssuesNodeMilestone): CreateReleaseParams {
@@ -221,9 +225,11 @@ export class SyncRepository {
     let issuesUpdated = 0;
     let issuesSkipped = 0;
 
-    // check JIRA is connected and do checks
-    info('Check JIRA is available');
-    await this.#jira.initAndCheck();
+    // check JIRA is connected and do checks (skip if Jira was provided pre-initialized)
+    if (!this.#jiraWasProvided) {
+      info('Check JIRA is available');
+      await this.#jira.initAndCheck();
+    }
 
     // get all the issues from GitHub that have been updated since a given date
     info('Grab recent issues being updated...');
