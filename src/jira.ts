@@ -143,34 +143,37 @@ export class Jira {
       }
     }
 
-    // check if the wanted component exists, create if missing
+    // check if the wanted components exist, create if missing
     this.#components = await this.#client.projectComponents.getProjectComponents({
       projectIdOrKey: this.#projectConfiguration.jira.projectKey,
     });
-    const wantedComponent = this.#projectConfiguration.jira.component;
-    let componentExists = this.#components.find((component) => component.name === wantedComponent);
 
-    if (!componentExists) {
-      info(`Component "${wantedComponent}" not found in Jira project ${this.#projectConfiguration.jira.projectKey}, creating it...`);
+    // Ensure all configured components exist
+    for (const wantedComponent of this.#projectConfiguration.jira.component) {
+      let componentExists = this.#components.find((component) => component.name === wantedComponent);
 
-      try {
-        const newComponent = await this.#client.projectComponents.createComponent({
-          name: wantedComponent,
-          project: this.#projectConfiguration.jira.projectKey,
-        });
+      if (!componentExists) {
+        info(`Component "${wantedComponent}" not found in Jira project ${this.#projectConfiguration.jira.projectKey}, creating it...`);
 
-        info(`✅ Created component "${wantedComponent}" (id: ${newComponent.id})`);
+        try {
+          const newComponent = await this.#client.projectComponents.createComponent({
+            name: wantedComponent,
+            project: this.#projectConfiguration.jira.projectKey,
+          });
 
-        // Refresh components list to include the newly created one
-        this.#components = await this.#client.projectComponents.getProjectComponents({
-          projectIdOrKey: this.#projectConfiguration.jira.projectKey,
-        });
+          info(`✅ Created component "${wantedComponent}" (id: ${newComponent.id})`);
 
-        componentExists = this.#components.find((component) => component.name === wantedComponent);
-      } catch (error) {
-        throw new Error(
-          `Failed to create component "${wantedComponent}" in Jira project ${this.#projectConfiguration.jira.projectKey}: ${error}`
-        );
+          // Refresh components list to include the newly created one
+          this.#components = await this.#client.projectComponents.getProjectComponents({
+            projectIdOrKey: this.#projectConfiguration.jira.projectKey,
+          });
+
+          componentExists = this.#components.find((component) => component.name === wantedComponent);
+        } catch (error) {
+          throw new Error(
+            `Failed to create component "${wantedComponent}" in Jira project ${this.#projectConfiguration.jira.projectKey}: ${error}`
+          );
+        }
       }
     }
 
@@ -616,7 +619,7 @@ export class Jira {
     let existingIssue: any = null;
     if (!isNewIssue) {
       try {
-        // Fetch all fields we might update
+        // Fetch all fields we might update (excluding components - those are set once on creation)
         const fieldsToFetch = ['status', 'resolution', 'fixVersions', 'description', 'priority'];
         if (this.#storyPointsFieldId) {
           fieldsToFetch.push(this.#storyPointsFieldId);
@@ -676,14 +679,13 @@ export class Jira {
       fixVersions = [{ id: createOrUpdateIssueParams.fixVersionId }];
     }
 
-    // grab component id from the components
-    const findComponent = this.#components.find((c) => c.name === this.#projectConfiguration.jira.component);
-    let component: { id: string } | undefined;
-    if (findComponent?.id) {
-      component = { id: findComponent.id };
-    }
-
-    const components = component ? [component] : undefined;
+    // grab component ids from the components list
+    const components = this.#projectConfiguration.jira.component
+      .map(componentName => {
+        const found = this.#components.find((c) => c.name === componentName);
+        return found?.id ? { id: found.id } : null;
+      })
+      .filter((c): c is { id: string } => c !== null);
 
     // Append GitHub issue URL to description for easy reference and deduplication
     // Jira has a ~32KB limit on description field, so truncate if needed
@@ -737,8 +739,9 @@ export class Jira {
         priorityChanged = createOrUpdateIssueParams.priority !== existingIssue.fields?.priority?.name;
       }
 
+      // Note: Components are set once on issue creation and not updated (use backfill workflow to update)
       // Note: Sprint assignment is checked separately below (requires different API call)
-      // Status transitions are also handled separately (requires fetching current status)
+      // Note: Status transitions are also handled separately (requires fetching current status)
 
       needsUpdate = statusChanged || resolutionChanged || fixVersionChanged || descriptionChanged || storyPointsChanged || priorityChanged;
 

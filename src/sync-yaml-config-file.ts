@@ -81,7 +81,7 @@ export interface SyncYamlSyncProject {
   };
   jira: {
     projectKey: string;
-    component: string;
+    component: string | string[]; // Single component or array of components
     globalIdPrefix: string;
     sprintBoard?: string; // Optional: only used in full mode for sprint sync
   };

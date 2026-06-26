@@ -44,7 +44,7 @@ export interface ProjectConfiguration {
     email: string;
     projectKey: string;
     writeToken: string;
-    component: string;
+    component: string[]; // Always normalized to array internally
     globalIdPrefix: string;
     sprintBoard?: string; // Optional: only used in full mode for sprint sync
   };
@@ -251,6 +251,11 @@ export class Configuration {
         projectFields,
       };
 
+      // Normalize component to array (support both string and string[] in config)
+      const componentList = Array.isArray(project.jira.component)
+        ? project.jira.component
+        : [project.jira.component];
+
       const jira = {
         host: this.#jiraHost,
         email: this.#jiraEmail,
@@ -258,7 +263,7 @@ export class Configuration {
         writeToken: this.#jiraWriteToken,
         globalIdPrefix: project.jira.globalIdPrefix,
         sprintBoard: project.jira.sprintBoard,
-        component: project.jira.component,
+        component: componentList,
       };
 
       const maxBatchNumberIssues = project.maxBatchSize;
