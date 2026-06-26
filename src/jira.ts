@@ -567,12 +567,18 @@ export class Jira {
       `  🧪 Creating issue in Jira Type/${createOrUpdateIssueParams.issuetype} status/${createOrUpdateIssueParams.state} fixVersionID ${createOrUpdateIssueParams.fixVersionId} sprintBoardId/${createOrUpdateIssueParams.sprintBoardId}`,
     );
 
+    // Apply title prefix if configured
+    const titlePrefix = this.#projectConfiguration.titlePrefix;
+    const summary = titlePrefix
+      ? `[${titlePrefix}] ${createOrUpdateIssueParams.title}`
+      : createOrUpdateIssueParams.title;
+
     // fields that may be mandatory for certain type of fields
     const createOptionalFields: Record<string, unknown> = {};
 
     // epic name
     if (this.#epicNameFieldId && createOrUpdateIssueParams.issuetype === 'Epic') {
-      createOptionalFields[this.#epicNameFieldId] = createOrUpdateIssueParams.title;
+      createOptionalFields[this.#epicNameFieldId] = summary;
     }
 
     // GitHub Issue URL will be set during editIssue instead of create
@@ -582,7 +588,7 @@ export class Jira {
     const createParams = {
       fields: {
         ...createOptionalFields,
-        summary: createOrUpdateIssueParams.title,
+        summary,
         project: {
           key: createOrUpdateIssueParams.jiraProjectKey,
         },

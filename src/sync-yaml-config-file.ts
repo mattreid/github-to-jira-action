@@ -64,6 +64,7 @@ export interface SyncYamlIssuesTypeMapping {
 
 export interface SyncYamlSyncProject {
   name: string;
+  titlePrefix?: string; // Optional: prefix for Jira issue titles (defaults to name before ' - ', empty string disables)
   github: {
     owner: string;
     repo: string;

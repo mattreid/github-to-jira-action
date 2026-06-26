@@ -37,6 +37,7 @@ export interface ProjectConfigurationGitHub {
 
 export interface ProjectConfiguration {
   name: string;
+  titlePrefix?: string; // Optional: prefix for Jira issue titles (empty string disables)
   github: ProjectConfigurationGitHub;
 
   jira: {
@@ -319,8 +320,20 @@ export class Configuration {
         }
       }
 
+      // Determine title prefix: explicit override, or extract from name before ' - '
+      let titlePrefix: string | undefined;
+      if (project.titlePrefix !== undefined) {
+        // Explicit override (including empty string to disable)
+        titlePrefix = project.titlePrefix;
+      } else {
+        // Auto-extract from name: "Team - repo" → "Team", "repo" → "repo"
+        const parts = project.name.split(' - ');
+        titlePrefix = parts[0];
+      }
+
       const projectConfiguration: ProjectConfiguration = {
         name: project.name,
+        titlePrefix,
         jira,
         github,
         maxBatchNumberIssues,
