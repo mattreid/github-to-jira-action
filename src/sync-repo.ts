@@ -285,6 +285,7 @@ export class SyncRepository {
 
       // create the issue in Jira
       info(`🔥 Create or update issue ${issueUrl} in Jira...`);
+      console.log(`DEBUG: issue.number=${issue.number}, issue.title="${issue.title}", issueUrl=${issueUrl}`);
 
       // get the labels of the issue (handle both REST and GraphQL formats)
       const labels = 'labels' in issue && Array.isArray(issue.labels)
