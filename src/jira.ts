@@ -323,13 +323,14 @@ export class Jira {
   }
 
   private async findExistingIssueByCustomField(githubUrl: string): Promise<string | undefined> {
-    // Search by GitHub Issue custom field (fast, structured search)
+    // Search by GitHub Issue custom field (exact match on URL field)
     if (!this.#githubIssueFieldId) {
       return undefined;
     }
 
     try {
-      const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND "${this.#githubIssueFieldId}" ~ "${githubUrl}"`;
+      // Use exact match (=) not contains (~) for URL fields
+      const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND "${this.#githubIssueFieldId}" = "${githubUrl}"`;
       const query = { jql, maxResults: 1 };
       const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJqlEnhancedSearch(query);
       return issues.issues?.[0]?.key;
