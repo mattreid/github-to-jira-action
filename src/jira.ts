@@ -32,6 +32,10 @@ export interface CreateIssueParams {
   globalId: string;
   remoteLinkUrl: string;
   remoteLinkTitle: string;
+
+  // Project-specific fields (passed per-call, not from cached Jira instance)
+  titlePrefix?: string; // Optional: prefix for issue title (e.g., "JKube", "Kaiden")
+  components: string[]; // Component names to assign to the issue
 }
 
 export interface CreateReleaseParams {
@@ -535,8 +539,8 @@ export class Jira {
       `  🧪 Creating issue in Jira Type/${createOrUpdateIssueParams.issuetype} status/${createOrUpdateIssueParams.state} fixVersionID ${createOrUpdateIssueParams.fixVersionId} sprintBoardId/${createOrUpdateIssueParams.sprintBoardId}`,
     );
 
-    // Apply title prefix if configured
-    const titlePrefix = this.#projectConfiguration.titlePrefix;
+    // Apply title prefix if configured (passed as parameter, not from cached config)
+    const titlePrefix = createOrUpdateIssueParams.titlePrefix;
     const summary = titlePrefix
       ? `[${titlePrefix}] ${createOrUpdateIssueParams.title}`
       : createOrUpdateIssueParams.title;
@@ -661,8 +665,8 @@ export class Jira {
       fixVersions = [{ id: createOrUpdateIssueParams.fixVersionId }];
     }
 
-    // grab component ids from the components list
-    const components = this.#projectConfiguration.jira.component
+    // grab component ids from the components list (passed as parameter, not from cached config)
+    const components = createOrUpdateIssueParams.components
       .map(componentName => {
         const found = this.#components.find((c) => c.name === componentName);
         return found?.id ? { id: found.id } : null;

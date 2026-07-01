@@ -438,6 +438,9 @@ export class SyncRepository {
         remoteLinkTitle,
         jiraProjectKey,
         priority,
+        // Project-specific fields (not from cached Jira instance)
+        titlePrefix: this.#projectConfiguration.titlePrefix,
+        components: this.#projectConfiguration.jira.component,
       };
 
       if (storyPoints) {
