@@ -317,7 +317,7 @@ export class SyncRepository {
         fixVersionId = this.#fixVersions.get(milestoneName);
       }
 
-      let status: string;
+      let status: string | undefined;
       let resolution: string | undefined;
       let storyPoints: number | undefined;
       let priority: string | undefined;
@@ -382,7 +382,7 @@ export class SyncRepository {
       } else {
         // Basic mode: Derive from issue state and state_reason (REST API)
         if (issueState === 'open') {
-          status = 'To Do';
+          status = undefined; // Leave in workflow's default status
           resolution = undefined; // Open issues are unresolved
         } else if (issueState === 'closed') {
           // Map state_reason to resolution
@@ -405,7 +405,7 @@ export class SyncRepository {
               resolution = 'Done';
           }
         } else {
-          status = 'To Do'; // Fallback
+          status = undefined; // Fallback: leave in workflow's default status
         }
 
         // storyPoints, priority, sprintBoardId remain undefined in basic mode

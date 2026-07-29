@@ -21,7 +21,7 @@ export interface CreateIssueParams {
   body: string;
   state: string;
   issuetype: string;
-  status: string;
+  status?: string;
   resolution?: string; // Optional: Jira resolution field (e.g., "Done", "Won't Do")
   storyPoints?: number;
   fixVersionId?: string;
@@ -771,6 +771,9 @@ export class Jira {
     // do the transitions for the status (only if we updated)
     const toStatus = createOrUpdateIssueParams.status;
 
+    if (!toStatus) {
+      debug(`  🧪 No status transition requested for ${issueKey}, skipping`);
+    } else {
     try {
       // get current status of the issue
       const issue = await this.#client.issues.getIssue({ issueIdOrKey: issueKey });
@@ -790,6 +793,7 @@ export class Jira {
       } else {
         throw statusError;
       }
+    }
     }
 
     // if sprint id, need to add the issue to the sprint
