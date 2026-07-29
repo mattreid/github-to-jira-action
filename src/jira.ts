@@ -579,10 +579,15 @@ export class Jira {
       },
     };
 
-    const existingKey = await this.findExistingGithubIssueInJira(
-      createOrUpdateIssueParams.globalId,
-      createOrUpdateIssueParams.remoteLinkUrl,
-    );
+    let existingKey: string | undefined;
+    if (this.#projectConfiguration.skipDuplicateDetection) {
+      console.log(`⏭️  Skipping duplicate detection (skipDuplicateDetection is enabled)`);
+    } else {
+      existingKey = await this.findExistingGithubIssueInJira(
+        createOrUpdateIssueParams.globalId,
+        createOrUpdateIssueParams.remoteLinkUrl,
+      );
+    }
 
     // create issue in Jira or update if already exists
     let issueKey: string;

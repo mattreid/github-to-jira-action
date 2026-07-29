@@ -87,6 +87,7 @@ export interface SyncYamlSyncProject {
     sprintBoard?: string; // Optional: only used in full mode for sprint sync
   };
   maxBatchSize: number;
+  skipDuplicateDetection?: boolean;
 }
 
 export interface SyncYaml {

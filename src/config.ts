@@ -59,6 +59,7 @@ export interface ProjectConfiguration {
 
   maxBatchNumberIssues: number;
   dryRun?: boolean; // NEW: Dry-run mode flag
+  skipDuplicateDetection?: boolean;
 }
 
 export class Configuration {
@@ -344,6 +345,7 @@ export class Configuration {
         priorityTypeMapping,
         priorityTypeDefault,
         dryRun: this.#dryRun,
+        skipDuplicateDetection: project.skipDuplicateDetection || false,
       };
 
       return projectConfiguration;
