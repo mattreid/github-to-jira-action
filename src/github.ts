@@ -187,14 +187,21 @@ export class GitHub {
     );
 
     // Sort by updated_at ascending (match GraphQL behavior)
+    // This ensures afterDate progresses chronologically through the backlog
     uniqueIssues.sort((a, b) =>
       new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
     );
 
-    // Respect maxBatchNumberIssues limit
+    // Process in batches to avoid memory issues and allow incremental progress
+    // The last issue's timestamp becomes the next run's afterDate
     const limitedIssues = uniqueIssues.slice(0, maxBatchNumberIssues);
 
-    info(`Fetched ${limitedIssues.length} issues via REST API`);
+    if (uniqueIssues.length > maxBatchNumberIssues) {
+      info(`Fetched ${uniqueIssues.length} issues, processing first ${maxBatchNumberIssues} (batch limit)`);
+    } else {
+      info(`Fetched ${limitedIssues.length} issues via REST API`);
+    }
+
     return limitedIssues;
   }
 
@@ -301,8 +308,8 @@ export class GitHub {
 
       if (!response.ok) {
         const authMode = this.#projectConfiguration.github.readToken ? 'authenticated' : 'unauthenticated';
-        const repo = `${owner}/${repo}`;
-        throw new Error(`GitHub API error: ${response.status} ${response.statusText} (${authMode} mode, repo: ${repo})`);
+        const repoSlug = `${owner}/${repo}`;
+        throw new Error(`GitHub API error: ${response.status} ${response.statusText} (${authMode} mode, repo: ${repoSlug})`);
       }
 
       const items: BasicIssue[] = await response.json();
@@ -347,8 +354,8 @@ export class GitHub {
 
       if (!response.ok) {
         const authMode = this.#projectConfiguration.github.readToken ? 'authenticated' : 'unauthenticated';
-        const repo = `${owner}/${repo}`;
-        throw new Error(`GitHub API error: ${response.status} ${response.statusText} (${authMode} mode, repo: ${repo})`);
+        const repoSlug = `${owner}/${repo}`;
+        throw new Error(`GitHub API error: ${response.status} ${response.statusText} (${authMode} mode, repo: ${repoSlug})`);
       }
 
       const items: BasicIssue[] = await response.json();
@@ -473,11 +480,14 @@ query getRecentIssues($cursorAfter: String) {
       allGraphQlResponse = currentEntries;
     }
 
-    // how many entries do we have ?
+    // Process in batches to avoid memory issues and allow incremental progress
     if (allGraphQlResponse.length >= this.#projectConfiguration.maxBatchNumberIssues) {
-      // we have enough entries, need to return only the first _maxBatchNumberIssues
-      return allGraphQlResponse.slice(0, this.#projectConfiguration.maxBatchNumberIssues);
+      // Reached batch limit, stop fetching and process what we have
+      const limited = allGraphQlResponse.slice(0, this.#projectConfiguration.maxBatchNumberIssues);
+      info(`Fetched ${allGraphQlResponse.length} issues, processing first ${this.#projectConfiguration.maxBatchNumberIssues} (batch limit)`);
+      return limited;
     }
+
     info(`Fetched additional ${currentEntries.length}, current total ${allGraphQlResponse.length} items`);
 
     // if there are more issues to fetch, fetch them

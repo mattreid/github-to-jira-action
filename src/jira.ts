@@ -82,8 +82,11 @@ export class Jira {
 
   #boardId: number | undefined;
 
+  #jiraHost: string;
+
   constructor(projectConfiguration: ProjectConfiguration) {
     this.#projectConfiguration = projectConfiguration;
+    this.#jiraHost = projectConfiguration.jira.host;
 
     const jiraConfig = {
       host: this.#projectConfiguration.jira.host,
@@ -589,7 +592,7 @@ export class Jira {
         const result = await this.#client.issues.createIssue(createParams);
         issueKey = result.key;
         isNewIssue = true;
-        console.log(`✅ Created Jira issue ${issueKey}`);
+        console.log(`✅ Created Jira issue ${issueKey} ${this.#jiraHost}/browse/${issueKey}`);
       } catch (createError: unknown) {
         const error = createError as { response?: { status?: number; data?: unknown } };
         console.error(`❌ Failed to create issue. Status: ${error.response?.status}`);
@@ -598,7 +601,7 @@ export class Jira {
       }
     } else {
       issueKey = existingKey;
-      console.log(`Found existing Jira issue ${issueKey}`);
+      console.log(`Found existing Jira issue ${issueKey} ${this.#jiraHost}/browse/${issueKey}`);
     }
 
     // For existing issues, fetch current state to detect changes
@@ -634,7 +637,7 @@ export class Jira {
             },
           },
         });
-        console.log(`✅ Remote link created for issue ${issueKey}`);
+        console.log(`✅ Remote link created for issue ${issueKey} ${this.#jiraHost}/browse/${issueKey}`);
       } catch (remoteLinkError: unknown) {
         const error = remoteLinkError as { response?: { status?: number; data?: unknown } };
         if (error.response?.status === 410) {
@@ -732,7 +735,7 @@ export class Jira {
       needsUpdate = statusChanged || resolutionChanged || fixVersionChanged || descriptionChanged || storyPointsChanged || priorityChanged;
 
       if (!needsUpdate) {
-        console.log(`  No changes detected for ${issueKey}, skipping update`);
+        console.log(`  No changes detected for ${issueKey}, skipping update ${this.#jiraHost}/browse/${issueKey}`);
       }
     }
 
@@ -827,7 +830,7 @@ export class Jira {
       }
     }
 
-    console.log(`✅ Successfully processed issue ${issueKey}`);
+    console.log(`✅ Successfully processed issue ${issueKey} ${this.#jiraHost}/browse/${issueKey}`);
     // Metrics: created = new issue, skipped = existing issue with no changes
     const wasSkipped = !isNewIssue && !needsUpdate;
     return { key: issueKey, created: isNewIssue, skipped: wasSkipped };
