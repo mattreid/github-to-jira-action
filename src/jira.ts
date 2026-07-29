@@ -107,6 +107,35 @@ export class Jira {
     this.#clientV3 = throttleClient.createProxy(new Version3Client(jiraConfig));
   }
 
+  async prepareForProject(projectConfiguration: ProjectConfiguration): Promise<void> {
+    this.#projectConfiguration = projectConfiguration;
+    await this.ensureComponents(projectConfiguration.jira.component);
+  }
+
+  private async ensureComponents(wantedComponents: string[]): Promise<void> {
+    for (const wantedComponent of wantedComponents) {
+      if (this.#components.find((c) => c.name === wantedComponent)) {
+        continue;
+      }
+
+      info(`Component "${wantedComponent}" not found in Jira project ${this.#projectConfiguration.jira.projectKey}, creating it...`);
+      try {
+        const newComponent = await this.#client.projectComponents.createComponent({
+          name: wantedComponent,
+          project: this.#projectConfiguration.jira.projectKey,
+        });
+        info(`✅ Created component "${wantedComponent}" (id: ${newComponent.id})`);
+        this.#components = await this.#client.projectComponents.getProjectComponents({
+          projectIdOrKey: this.#projectConfiguration.jira.projectKey,
+        });
+      } catch (error) {
+        throw new Error(
+          `Failed to create component "${wantedComponent}" in Jira project ${this.#projectConfiguration.jira.projectKey}: ${error}`
+        );
+      }
+    }
+  }
+
   async checkJiraConnection(): Promise<boolean> {
     try {
       await this.#client.myself.getCurrentUser();
@@ -150,39 +179,11 @@ export class Jira {
       }
     }
 
-    // check if the wanted components exist, create if missing
+    // Fetch components list and ensure all configured components exist
     this.#components = await this.#client.projectComponents.getProjectComponents({
       projectIdOrKey: this.#projectConfiguration.jira.projectKey,
     });
-
-    // Ensure all configured components exist
-    for (const wantedComponent of this.#projectConfiguration.jira.component) {
-      let componentExists = this.#components.find((component) => component.name === wantedComponent);
-
-      if (!componentExists) {
-        info(`Component "${wantedComponent}" not found in Jira project ${this.#projectConfiguration.jira.projectKey}, creating it...`);
-
-        try {
-          const newComponent = await this.#client.projectComponents.createComponent({
-            name: wantedComponent,
-            project: this.#projectConfiguration.jira.projectKey,
-          });
-
-          info(`✅ Created component "${wantedComponent}" (id: ${newComponent.id})`);
-
-          // Refresh components list to include the newly created one
-          this.#components = await this.#client.projectComponents.getProjectComponents({
-            projectIdOrKey: this.#projectConfiguration.jira.projectKey,
-          });
-
-          componentExists = this.#components.find((component) => component.name === wantedComponent);
-        } catch (error) {
-          throw new Error(
-            `Failed to create component "${wantedComponent}" in Jira project ${this.#projectConfiguration.jira.projectKey}: ${error}`
-          );
-        }
-      }
-    }
+    await this.ensureComponents(this.#projectConfiguration.jira.component);
 
     const fields = await this.#client.issueFields.getFields();
 

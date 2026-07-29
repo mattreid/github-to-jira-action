@@ -75,6 +75,8 @@ export class Sync {
           jira = new Jira(projectConfiguration);
           await jira.initAndCheck();
           jiraCache.set(projectKey, jira);
+        } else {
+          await jira.prepareForProject(projectConfiguration);
         }
 
         const syncRepository = new SyncRepository(projectConfiguration, jira);
