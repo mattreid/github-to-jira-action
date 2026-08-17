@@ -162,7 +162,7 @@ syncProjects:
       repo: kubernetes
       afterDate: "2026-06-01T00:00:00Z"
       syncMode: basic
-      assigneeWhitelist:
+      assigneeAllowlist:
         - your-github-username
     jira:
       projectKey: K8S
@@ -187,7 +187,7 @@ DRY_RUN=true node test-basic-sync.js
 **Use case**: Verify only team issues are synced
 
 ```yaml
-assigneeWhitelist:
+assigneeAllowlist:
   - alice
   - bob
   - charlie
@@ -292,7 +292,7 @@ Generate new token: https://id.atlassian.com/manage-profile/security/api-tokens
 
 2. **Assignee filter excludes all issues**
    ```yaml
-   assigneeWhitelist:
+   assigneeAllowlist:
      - alice  # ← But no issues are assigned to alice
    ```
    **Fix**: Remove filter or assign yourself in GitHub
@@ -323,14 +323,14 @@ Generate new token: https://id.atlassian.com/manage-profile/security/api-tokens
 ```yaml
 syncProjects:
   - github:
-      assigneeWhitelist:  # ← Must be indented under github
+      assigneeAllowlist:  # ← Must be indented under github
         - alice
 ```
 
 **Not**:
 ```yaml
 syncProjects:
-  - assigneeWhitelist:  # ❌ Wrong level
+  - assigneeAllowlist:  # ❌ Wrong level
       - alice
     github:
       owner: org

@@ -107,7 +107,7 @@ After basic test works, try assignee filtering:
 # In sync.yaml, add:
 syncProjects:
   - github:
-      assigneeWhitelist:
+      assigneeAllowlist:
         - your-github-username  # Only sync your assigned issues
 ```
 

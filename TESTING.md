@@ -77,7 +77,7 @@ syncProjects:
       repo: test-sync-repo
       afterDate: "2026-06-16T00:00:00Z"
       syncMode: basic  # ← NEW: Use REST API, no Projects v2
-      assigneeWhitelist:  # ← NEW: Only sync issues assigned to you
+      assigneeAllowlist:  # ← NEW: Only sync issues assigned to you
         - mattreid
     useMapping:
       issueType: Basic Issue Mapping
@@ -303,7 +303,7 @@ node test-sync.js
 
 **Possible causes**:
 1. **Assignee filter** - Issues are not assigned to `mattreid`
-   - **Fix**: Remove `assigneeWhitelist` or assign yourself in GitHub
+   - **Fix**: Remove `assigneeAllowlist` or assign yourself in GitHub
 2. **Date filter** - `afterDate` is too recent
    - **Fix**: Set `afterDate: "2020-01-01T00:00:00Z"` to catch all issues
 3. **Pull requests** - All items are PRs, not issues
