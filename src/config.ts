@@ -321,15 +321,10 @@ export class Configuration {
         }
       }
 
-      // Determine title prefix: explicit override, or extract from name before ' - '
+      // Title prefix: disabled by default, opt-in via config
       let titlePrefix: string | undefined;
-      if (project.titlePrefix !== undefined) {
-        // Explicit override (including empty string to disable)
+      if (project.titlePrefix) {
         titlePrefix = project.titlePrefix;
-      } else {
-        // Auto-extract from name: "Team - repo" → "Team", "repo" → "repo"
-        const parts = project.name.split(' - ');
-        titlePrefix = parts[0];
       }
 
       const projectConfiguration: ProjectConfiguration = {

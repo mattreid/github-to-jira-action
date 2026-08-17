@@ -46,4 +46,4 @@ jobs:
           git add ./*
           git commit -m "Publish next version" -s
           git remote -v
-          git push -f "https://$GITHUB_ACTOR:$GITHUB_TOKEN@github.com/benoitf/github-to-jira-action.git" next
+          git push -f "https://$GITHUB_ACTOR:$GITHUB_TOKEN@github.com/${{ github.repository }}.git" next

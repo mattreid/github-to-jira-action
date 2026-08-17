@@ -48,7 +48,7 @@ export class Main {
     const githubReadToken = core.getInput(Main.GITHUB_READ_TOKEN) || '';
 
     // dry-run mode (optional)
-    const dryRun = core.getInput(Main.DRY_RUN) === 'true' || process.env.DRY_RUN === 'true';
+    const dryRun = core.getInput(Main.DRY_RUN) === 'true' || process.env['DRY_RUN'] === 'true';
     if (dryRun) {
       core.info('🔍 DRY RUN MODE - No changes will be made to Jira');
     }

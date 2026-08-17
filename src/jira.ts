@@ -65,6 +65,10 @@ export interface UpdateSprintParams {
   endDate: string;
 }
 
+interface EnhancedSearchResponse {
+  issues?: Array<{ key: string; fields?: Record<string, unknown> }>;
+}
+
 export class Jira {
   #client: Version2Client;
   #agileClient: AgileClient;
@@ -340,7 +344,7 @@ export class Jira {
       // Use exact match (=) not contains (~) for URL fields
       const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND "${this.#githubIssueFieldId}" = "${githubUrl}"`;
       const query = { jql, maxResults: 1 };
-      const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJqlEnhancedSearch(query);
+      const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJqlEnhancedSearch(query) as unknown as EnhancedSearchResponse;
       return issues.issues?.[0]?.key;
     } catch (error) {
       console.warn(`⚠️  GitHub Issue custom field search failed:`, error);
@@ -415,13 +419,13 @@ export class Jira {
       const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND description ~ "${githubUrl}" ORDER BY updated DESC`;
       const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJqlEnhancedSearch({
         jql,
-        maxResults: 20,  // Increased from 5 to catch more potential matches
+        maxResults: 20,
         fields: ['description', 'key'],
-      });
+      }) as unknown as EnhancedSearchResponse;
 
       // Check each result for exact URL match in description
       for (const issue of issues.issues || []) {
-        const descText = this.extractTextFromDescription(issue.fields?.description);
+        const descText = this.extractTextFromDescription(issue.fields?.['description']);
         if (descText.includes(githubUrl)) {
           return issue.key;
         }
@@ -454,13 +458,12 @@ export class Jira {
       // CRITICAL: Order by UPDATED, not CREATED
       // This ensures old Jira issues that were recently updated in GitHub
       // will still appear in the search window
-      const maxResults = 150; // Increased from 100 to reduce false negatives
+      const maxResults = 150;
       const response = await this.#clientV3.issueSearch.searchForIssuesUsingJqlEnhancedSearch({
-        jql: `project = "${this.#projectConfiguration.jira.projectKey}" ORDER BY updated DESC`, // ← ORDER BY UPDATED
+        jql: `project = "${this.#projectConfiguration.jira.projectKey}" ORDER BY updated DESC`,
         maxResults,
         fields: ['description', 'key', 'created', 'updated'],
-        validateQuery: 'none', // Skip JQL validation
-      });
+      }) as unknown as EnhancedSearchResponse;
 
       if (!response.issues || response.issues.length === 0) {
         console.warn(`⚠️  No issues returned from project ${this.#projectConfiguration.jira.projectKey}`);
@@ -479,7 +482,7 @@ export class Jira {
       // Filter client-side by checking description field
       const matches: string[] = [];
       for (const issue of response.issues) {
-        const descText = this.extractTextFromDescription(issue.fields?.description);
+        const descText = this.extractTextFromDescription(issue.fields?.['description']);
         if (descText && descText.includes(githubUrl)) {
           matches.push(issue.key);
         }

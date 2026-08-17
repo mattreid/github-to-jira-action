@@ -1,6 +1,4 @@
 import { info } from '@actions/core';
-import { getOctokit } from '@actions/github';
-import type { GitHub as OctokitGitHub } from '@actions/github/lib/utils.js';
 import { graphql } from '@octokit/graphql';
 import type { ProjectConfiguration, ProjectConfigurationFieldType } from './config.js';
 
@@ -106,14 +104,9 @@ export interface BasicIssue {
 
 export class GitHub {
   #projectConfiguration: ProjectConfiguration;
-  #githubReadAccess: InstanceType<typeof OctokitGitHub> | undefined;
 
   constructor(projectConfiguration: ProjectConfiguration) {
     this.#projectConfiguration = projectConfiguration;
-    // Only initialize Octokit if we have a token (needed for GraphQL full mode)
-    if (this.#projectConfiguration.github.readToken) {
-      this.#githubReadAccess = getOctokit(this.#projectConfiguration.github.readToken);
-    }
   }
 
   async getIssuesUpdatedAfter(): Promise<{
@@ -388,16 +381,6 @@ export class GitHub {
       'Accept': 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
     };
-  }
-
-  foo() {
-    if (!this.#githubReadAccess) {
-      throw new Error('GitHub Octokit client not initialized - token required for this operation');
-    }
-    this.#githubReadAccess.rest.issues.listForRepo({
-      owner: this.#projectConfiguration.github.owner,
-      repo: this.#projectConfiguration.github.repo,
-    });
   }
 
   protected async doGetIssuesUpdatedAfterBatch(

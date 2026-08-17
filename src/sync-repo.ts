@@ -103,6 +103,7 @@ export class SyncRepository {
         const updatedRelease = {
           ...jiraRelease,
           id: jiraRelease.id ?? '',
+          projectId: Number(jiraRelease.projectId),
           name: fromGithub.name,
           released: fromGithub.released,
           releaseDate: fromGithub.releaseDate,
@@ -243,7 +244,7 @@ export class SyncRepository {
       info('🔍 [DRY RUN] Skipping releases sync');
     } else {
       info('Sync releases (milestones → fix versions)...');
-      await this.syncReleases(recentIssuesSearch.issues);
+      await this.syncReleases(recentIssuesSearch.issues as GraphQLSearchIssuesNode[]);
     }
 
     // Sprints only available in full mode (Projects v2 iterations)
@@ -252,7 +253,7 @@ export class SyncRepository {
         info('🔍 [DRY RUN] Skipping sprints sync');
       } else {
         info('Sync sprint...');
-        await this.syncSprints(recentIssuesSearch.issues);
+        await this.syncSprints(recentIssuesSearch.issues as GraphQLSearchIssuesNode[]);
       }
     } else {
       info('ℹ️  Basic mode: Skipping sprints sync (Projects v2 iterations not available)');
@@ -577,7 +578,7 @@ export class SyncRepository {
     }
 
     // not found, default
-    return this.#projectConfiguration.statusTypeDefault;
+    return this.#projectConfiguration.statusTypeDefault ?? 'Backlog';
   }
 
   /**

@@ -186,7 +186,7 @@ export class Sync {
         return false;
       }
 
-      const lastIssueUpdate = new Date(issues[0].updated_at);
+      const lastIssueUpdate = new Date(issues[0]!.updated_at);
       const syncDate = startDate.toDate();
 
       // If most recent issue was updated after our sync date, sync the repo
