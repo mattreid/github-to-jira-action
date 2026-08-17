@@ -11,7 +11,7 @@ Welcome to **GitHub to Jira Action**! This GitHub Action automates the synchroni
 - **Assignee filtering**: Only sync issues assigned to your team members (server-side filtering for efficiency)
 - **Incremental sync**: Automatically tracks last sync time, only fetches updated issues with per-repo state tracking
 - **Multiple components**: Assign multiple Jira components per issue (e.g., repo + team)
-- **Auto-prefixed titles**: Automatically prefix Jira issue titles with team/repo identifier for easy visual identification
+- **Optional title prefixing**: Opt-in prefix for Jira issue titles with team/repo identifier for easy visual identification
 - **GitHub Issue field support**: Optional integration with Jira's custom GitHub Issue field for reliable deduplication
 - **Dry-run mode**: Test configuration without creating Jira issues
 - Supports **batch synchronization** with custom batch size configurations
@@ -197,7 +197,7 @@ issuesTypeMappings:
         toJira: Task
 
 syncProjects:
-  - name: "Podman Desktop"
+  - name: "My Project"
     github:
       owner: my-organization-on-github
       repo: my-repository-name
@@ -352,7 +352,7 @@ jobs:
 
         # use development branch of the action (next is the build from the main branch)
       - name: Run GitHub to Jira Action
-        uses: benoitf/github-to-jira-action@next
+        uses: mattreid/github-to-jira-action@next
         with:
           jira-host: ${{ secrets.JIRA_HOST }}
           jira-email: ${{ secrets.JIRA_EMAIL }}
@@ -548,34 +548,29 @@ syncProjects:
 
 ### Title Prefixing
 
-Automatically prefix Jira issue titles with team or repo identifier:
+Optionally prefix Jira issue titles with a team or repo identifier. Disabled by default.
 
 ```yaml
 syncProjects:
-  # Auto-extracted from name (before ' - ')
-  - name: "Platform Team - kubernetes/kubernetes"
-    # Creates: "[Platform Team] Fix authentication bug"
-  
-  # Single repo name
+  # No prefix (default)
   - name: "my-repo"
-    # Creates: "[my-repo] Add new feature"
-  
-  # Custom override
-  - name: "kubernetes/extension-very-long-name"
-    titlePrefix: "K8s-Ext"
-    # Creates: "[K8s-Ext] Issue title"
-  
-  # Disable prefix
-  - name: "test-repo"
-    titlePrefix: ""
-    # Creates: "Issue title" (no prefix)
+    # Creates: "Fix authentication bug"
+
+  # Enable with custom prefix
+  - name: "kubernetes/kubernetes"
+    titlePrefix: "K8s"
+    # Creates: "[K8s] Fix authentication bug"
+
+  # Enable with longer prefix
+  - name: "Platform Team - prometheus"
+    titlePrefix: "Platform Team"
+    # Creates: "[Platform Team] Add new feature"
 ```
 
 **Benefits:**
 - Casual viewers can identify issues without checking components
-- Zero config for standard naming patterns ("Team - repo")
-- Optional override for cleaner prefixes
-- Can disable per-repo
+- Useful when multiple repos share a single Jira project
+- Opt-in only — no surprises
 
 ### GitHub Issue Custom Field
 
