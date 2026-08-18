@@ -731,13 +731,19 @@ export class Jira {
     const descriptionWithGitHubLink = `${body}${gitHubUrlSuffix}`;
 
     // update the issue with the story points, body, etc
-    const updateFields = {
-      ...createParams.fields,
+    // Only include fields safe to update — exclude create-only fields
+    // (project, issuetype, epicName) that fail on edit or on non-matching issue types
+    const updateFields: Record<string, unknown> = {
       ...updateOptionalFields,
+      summary,
       components,
       description: descriptionWithGitHubLink,
       fixVersions,
-      // Add resolution if provided
+      ...(createOrUpdateIssueParams.priority && {
+        priority: {
+          name: createOrUpdateIssueParams.priority,
+        },
+      }),
       ...(createOrUpdateIssueParams.resolution && {
         resolution: {
           name: createOrUpdateIssueParams.resolution,
