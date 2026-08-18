@@ -69,6 +69,12 @@ interface EnhancedSearchResponse {
   issues?: Array<{ key: string; fields?: Record<string, unknown> }>;
 }
 
+interface JqlSearchParams {
+  jql: string;
+  maxResults?: number;
+  fields?: string[];
+}
+
 export class Jira {
   #client: Version2Client;
   #agileClient: AgileClient;
@@ -109,6 +115,33 @@ export class Jira {
     this.#client = throttleClient.createProxy(new Version2Client(jiraConfig));
     this.#agileClient = throttleClient.createProxy(new AgileClient(jiraConfig));
     this.#clientV3 = throttleClient.createProxy(new Version3Client(jiraConfig));
+  }
+
+  private async searchJql(params: JqlSearchParams): Promise<EnhancedSearchResponse> {
+    const url = new URL('/rest/api/3/search/jql', this.#jiraHost);
+    url.searchParams.set('jql', params.jql);
+    if (params.maxResults) url.searchParams.set('maxResults', String(params.maxResults));
+    if (params.fields) url.searchParams.set('fields', params.fields.join(','));
+
+    const credentials = Buffer.from(
+      `${this.#projectConfiguration.jira.email}:${this.#projectConfiguration.jira.writeToken}`,
+    ).toString('base64');
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Basic ${credentials}`,
+        Accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw Object.assign(new Error(`Jira search failed: ${response.status} ${response.statusText}`), {
+        response: { status: response.status, data: body },
+      });
+    }
+
+    return (await response.json()) as EnhancedSearchResponse;
   }
 
   async prepareForProject(projectConfiguration: ProjectConfiguration): Promise<void> {
@@ -343,8 +376,7 @@ export class Jira {
     try {
       // Use exact match (=) not contains (~) for URL fields
       const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND "${this.#githubIssueFieldId}" = "${githubUrl}"`;
-      const query = { jql, maxResults: 1 };
-      const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJqlPost(query) as unknown as EnhancedSearchResponse;
+      const issues = await this.searchJql({ jql, maxResults: 1 });
       return issues.issues?.[0]?.key;
     } catch (error) {
       console.warn(`⚠️  GitHub Issue custom field search failed:`, error);
@@ -417,11 +449,11 @@ export class Jira {
       // Use simple JQL to search description field with project scoping
       // Note: JQL text search (~) doesn't support OR conditions, so we search the full URL
       const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND description ~ "${githubUrl}" ORDER BY updated DESC`;
-      const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJqlPost({
+      const issues = await this.searchJql({
         jql,
         maxResults: 20,
         fields: ['description', 'key'],
-      }) as unknown as EnhancedSearchResponse;
+      });
 
       // Check each result for exact URL match in description
       for (const issue of issues.issues || []) {
@@ -459,11 +491,11 @@ export class Jira {
       // This ensures old Jira issues that were recently updated in GitHub
       // will still appear in the search window
       const maxResults = 150;
-      const response = await this.#clientV3.issueSearch.searchForIssuesUsingJqlPost({
+      const response = await this.searchJql({
         jql: `project = "${this.#projectConfiguration.jira.projectKey}" ORDER BY updated DESC`,
         maxResults,
         fields: ['description', 'key', 'created', 'updated'],
-      }) as unknown as EnhancedSearchResponse;
+      });
 
       if (!response.issues || response.issues.length === 0) {
         console.warn(`⚠️  No issues returned from project ${this.#projectConfiguration.jira.projectKey}`);
