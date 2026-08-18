@@ -344,7 +344,7 @@ export class Jira {
       // Use exact match (=) not contains (~) for URL fields
       const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND "${this.#githubIssueFieldId}" = "${githubUrl}"`;
       const query = { jql, maxResults: 1 };
-      const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJqlEnhancedSearch(query) as unknown as EnhancedSearchResponse;
+      const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJqlPost(query) as unknown as EnhancedSearchResponse;
       return issues.issues?.[0]?.key;
     } catch (error) {
       console.warn(`⚠️  GitHub Issue custom field search failed:`, error);
@@ -417,7 +417,7 @@ export class Jira {
       // Use simple JQL to search description field with project scoping
       // Note: JQL text search (~) doesn't support OR conditions, so we search the full URL
       const jql = `project = "${this.#projectConfiguration.jira.projectKey}" AND description ~ "${githubUrl}" ORDER BY updated DESC`;
-      const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJqlEnhancedSearch({
+      const issues = await this.#clientV3.issueSearch.searchForIssuesUsingJqlPost({
         jql,
         maxResults: 20,
         fields: ['description', 'key'],
@@ -459,7 +459,7 @@ export class Jira {
       // This ensures old Jira issues that were recently updated in GitHub
       // will still appear in the search window
       const maxResults = 150;
-      const response = await this.#clientV3.issueSearch.searchForIssuesUsingJqlEnhancedSearch({
+      const response = await this.#clientV3.issueSearch.searchForIssuesUsingJqlPost({
         jql: `project = "${this.#projectConfiguration.jira.projectKey}" ORDER BY updated DESC`,
         maxResults,
         fields: ['description', 'key', 'created', 'updated'],
